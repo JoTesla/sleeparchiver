@@ -11,7 +11,8 @@
         <include name="AppFramework-1.03.jar"/>
         <include name="forms-1.2.1.jar"/>
         <include name="javacsv-2.0.jar"/>
-        <include name="RXTXcomm.jar"/>
+<!--        <include name="RXTXcomm.jar"/>-->
+        <include name="jSerialComm-2.11.0.jar" />
         <include name="swing-worker-1.2.jar"/>
     </fileset>
 
@@ -77,8 +78,8 @@
                debug="false"
                optimize="true"
                deprecation="on"
-               source="11"
-               target="11"/>
+               source="1.8"
+               target="1.8"/>
         <copy todir="${dir.build.production}">
             <fileset dir="${dir.src}">
                 <exclude name="**/*.java"/>
@@ -92,8 +93,8 @@
                srcdir="${dir.test}"
                destdir="${dir.build.test}"
                deprecation="on"
-               source="11"
-               target="11"/>
+               source="1.8"
+               target="1.8"/>
         <copy todir="${dir.build.test}">
             <fileset dir="${dir.test}">
                 <exclude name="**/*.java"/>
@@ -220,8 +221,8 @@
 
             <define name="FILE_JAR" value="${file.jar}"/>
             <define name="FILE_JAVA" value="javaw.exe"/>
-            <define name="JAVA_NUMBER" value="6.0.100"/>
-            <define name="JAVA_VERSION" value="1.6.0_10"/>
+            <define name="JAVA_NUMBER" value="8.0.100"/>
+            <define name="JAVA_VERSION" value="1.8"/>
             <define name="JAVA_URL" value="http://java.com/download/"/>
 
             <define name="PRODUCT" value="${product}"/>
