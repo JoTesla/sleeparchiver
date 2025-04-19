@@ -77,8 +77,8 @@
                debug="false"
                optimize="true"
                deprecation="on"
-               source="11"
-               target="11"/>
+               source="1.8"
+               target="1.8"/>
         <copy todir="${dir.build.production}">
             <fileset dir="${dir.src}">
                 <exclude name="**/*.java"/>
@@ -92,8 +92,8 @@
                srcdir="${dir.test}"
                destdir="${dir.build.test}"
                deprecation="on"
-               source="11"
-               target="11"/>
+               source="1.8"
+               target="1.8"/>
         <copy todir="${dir.build.test}">
             <fileset dir="${dir.test}">
                 <exclude name="**/*.java"/>
