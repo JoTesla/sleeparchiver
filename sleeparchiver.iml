@@ -14,6 +14,16 @@
     <orderEntry type="library" name="RXTX" level="project" />
     <orderEntry type="library" name="JUnit" level="project" />
     <orderEntry type="library" name="JavaCSV" level="project" />
+    <orderEntry type="module-library">
+      <library>
+        <CLASSES>
+          <root url="jar://$MODULE_DIR$/lib/jSerialComm-2.11.0.jar!/" />
+        </CLASSES>
+        <JAVADOC />
+        <SOURCES>
+          <root url="jar://$USER_HOME$/.ideaLibSources/jSerialComm-2.11.0-sources.jar!/" />
+        </SOURCES>
+      </library>
+    </orderEntry>
   </component>
 </module>
-

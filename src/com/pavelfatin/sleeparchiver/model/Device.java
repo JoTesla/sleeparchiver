@@ -1,35 +1,13 @@
-/*
- * SleepArchiver - cross-platform data manager for Sleeptracker-series watches.
- * Copyright (C) 2009-2011 Pavel Fatin <http://pavelfatin.com>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 package com.pavelfatin.sleeparchiver.model;
 
+import com.fazecast.jSerialComm.SerialPort;
 import com.pavelfatin.sleeparchiver.lang.Utilities;
-import gnu.io.CommPortIdentifier;
-import gnu.io.PortInUseException;
-import gnu.io.SerialPort;
-import gnu.io.UnsupportedCommOperationException;
 
 import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
-import java.util.Enumeration;
 import java.util.List;
 
 public class Device {
@@ -42,60 +20,46 @@ public class Device {
     private String _app;
     private int _year;
 
-
     public Device(String app, int year) {
         _app = app;
         _year = year;
     }
 
     public Night readData() {
-        List<CommPortIdentifier> ids = findFreeSerialPorts();
+        List<SerialPort> ports = findFreeSerialPorts();
 
-        for (CommPortIdentifier id : ids) {
+        for (SerialPort port : ports) {
             try {
-                return readNight(id, _app, _year);
-            } catch (ProtocolException e) {
-                // do nothing
-            } catch (IOException e) {
-                // do nothing
-            } catch (UnsupportedCommOperationException e) {
-                // do nothing
-            } catch (PortInUseException e) {
-                // do nothing
+                return readNight(port, _year);
+            } catch ( IOException e) {
+                // Пропускаем порт
             }
         }
 
         return null;
     }
 
-    private static Night readNight(CommPortIdentifier id, String app, int year)
-            throws IOException, UnsupportedCommOperationException, PortInUseException {
-        SerialPort port = (SerialPort) id.open(app, TIMEOUT);
+    private static Night readNight(SerialPort port, int year) throws IOException {
+        port.setBaudRate(19200);
+        port.setNumDataBits(8);
+        port.setNumStopBits(SerialPort.ONE_STOP_BIT);
+        port.setParity(SerialPort.NO_PARITY);
+        port.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, TIMEOUT, 0);
+
+        if (!port.openPort()) {
+            throw new IOException("Cannot open port: " + port.getSystemPortName());
+        }
+
         try {
-            port.setSerialPortParams(2400,
-                    SerialPort.DATABITS_8,
-                    SerialPort.STOPBITS_1,
-                    SerialPort.PARITY_NONE);
-
-            port.setInputBufferSize(BUFFER);
-
-            port.setRTS(false);
-            port.setDTR(true);
+            port.clearRTS();
+            port.setDTR();
 
             sendHandshake(port);
             sleep(DELAY);
 
-            return readNight(port, year);
+            return readNightFromPort(port, year);
         } finally {
-            port.close();
-        }
-    }
-
-    private static void sleep(int millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
+            port.closePort();
         }
     }
 
@@ -109,7 +73,7 @@ public class Device {
         }
     }
 
-    private static Night readNight(SerialPort port, int year) throws IOException {
+    private static Night readNightFromPort(SerialPort port, int year) throws IOException {
         InputStream in = new BufferedInputStream(port.getInputStream());
         try {
             return readNight(new DeviceReader(in, year));
@@ -132,7 +96,7 @@ public class Device {
         Time alarm = reader.readTime();
 
         int count = reader.readByte();
-        List<Time> moments = new ArrayList<Time>();
+        List<Time> moments = new ArrayList<>();
         for (int i = 0; i < count; i++) {
             moments.add(reader.readTime());
             reader.skip();
@@ -154,17 +118,22 @@ public class Device {
         return new Night(date, alarm, window, toBed, moments);
     }
 
-    private static List<CommPortIdentifier> findFreeSerialPorts() {
-        List<CommPortIdentifier> result = new ArrayList<CommPortIdentifier>();
-        Enumeration e = CommPortIdentifier.getPortIdentifiers();
-        while (e.hasMoreElements()) {
-            CommPortIdentifier id = (CommPortIdentifier) e.nextElement();
-            if (id.getPortType() == CommPortIdentifier.PORT_SERIAL) {
-                if (!id.isCurrentlyOwned()) {
-                    result.add(id);
-                }
+    private static List<SerialPort> findFreeSerialPorts() {
+        List<SerialPort> result = new ArrayList<>();
+        SerialPort[] ports = SerialPort.getCommPorts();
+        for (SerialPort port : ports) {
+            if (!port.isOpen()) {
+                result.add(port);
             }
         }
         return result;
+    }
+
+    private static void sleep(int millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

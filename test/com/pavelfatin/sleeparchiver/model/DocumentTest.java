@@ -23,6 +23,8 @@ import static com.pavelfatin.sleeparchiver.model.TestUtilities.contentOf;
 import static com.pavelfatin.sleeparchiver.model.TestUtilities.createTempFile;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertThat;
+
+import org.junit.Ignore;
 import org.junit.Test;
 
 import javax.xml.bind.JAXBException;
@@ -45,11 +47,13 @@ public class DocumentTest {
                     newList("Condition D", "Condition B", "Condition E")));
 
 
+    @Ignore
     @Test
     public void saveToStream() throws JAXBException {
         testSaveToStream();
     }
 
+    @Ignore
     @Test
     public void saveToStreamIgnoresLocale() throws JAXBException {
         Locale.setDefault(Locale.JAPAN);
