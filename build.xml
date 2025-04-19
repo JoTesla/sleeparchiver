@@ -76,7 +76,9 @@
                destdir="${dir.build.production}"
                debug="false"
                optimize="true"
-               deprecation="on"/>
+               deprecation="on"
+               source="11"
+               target="11"/>
         <copy todir="${dir.build.production}">
             <fileset dir="${dir.src}">
                 <exclude name="**/*.java"/>
@@ -89,7 +91,9 @@
         <javac classpathref="classpath.test"
                srcdir="${dir.test}"
                destdir="${dir.build.test}"
-               deprecation="on"/>
+               deprecation="on"
+               source="11"
+               target="11"/>
         <copy todir="${dir.build.test}">
             <fileset dir="${dir.test}">
                 <exclude name="**/*.java"/>
