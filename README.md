@@ -39,7 +39,16 @@ SleepArchiver - это десктопное приложение для загр
 - Gradle 8.12 или выше (поставляется с wrapper)
 - Часы Sleeptracker с USB кабелем
 
-## Сборка
+## Установка
+
+### Готовые сборки
+
+Скачайте готовые установочные пакеты из раздела [Releases](https://github.com/JoTesla/sleeparchiver/releases):
+- **macOS**: SleepArchiver-2.0.0.dmg
+- **Windows**: SleepArchiver-2.0.0.msi
+- **Linux**: SleepArchiver-2.0.0.deb
+
+## Сборка из исходников
 
 ```bash
 # Клонирование репозитория
@@ -55,9 +64,21 @@ cd sleeparchiver
 # Запуск тестов
 ./gradlew test
 
-# Создание дистрибутива (DMG для macOS)
+# Создание дистрибутива (DMG для macOS, MSI для Windows, DEB для Linux)
 ./gradlew jpackage
 ```
+
+## Создание релиза
+
+Для создания нового релиза с автоматической сборкой для всех платформ:
+
+```bash
+# Создать и запушить тег версии
+git tag v2.0.0
+git push origin v2.0.0
+```
+
+GitHub Actions автоматически соберет DMG (macOS), MSI (Windows) и DEB (Linux) и создаст Release с артефактами.
 
 ## Использование
 

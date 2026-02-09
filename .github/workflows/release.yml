@@ -1,0 +1,110 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Срабатывает при push тега вида v1.0.0
+  workflow_dispatch:  # Позволяет запустить вручную
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Build and Test
+        run: ./gradlew build test
+
+      - name: Create DMG
+        run: ./gradlew jpackage
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: SleepArchiver-macOS
+          path: build/jpackage-output/*.dmg
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Build and Test
+        run: ./gradlew build test
+
+      - name: Create EXE/MSI
+        run: ./gradlew jpackage
+
+      - name: Upload Windows Installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: SleepArchiver-Windows
+          path: build/jpackage-output/*.msi
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Build and Test
+        run: ./gradlew build test
+
+      - name: Create DEB/RPM
+        run: ./gradlew jpackage
+
+      - name: Upload Linux Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: SleepArchiver-Linux
+          path: build/jpackage-output/*.deb
+
+  release:
+    needs: [build-macos, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/SleepArchiver-macOS/*
+            artifacts/SleepArchiver-Windows/*
+            artifacts/SleepArchiver-Linux/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
