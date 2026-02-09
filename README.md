@@ -1,6 +1,6 @@
 # SleepArchiver
 
-Приложение для управления данными сна с часов Sleeptracker.
+Приложение для управления данными сна с часов Sleeptracker (SleepTracker, Sleep Tracker).
 
 ## Описание
 
