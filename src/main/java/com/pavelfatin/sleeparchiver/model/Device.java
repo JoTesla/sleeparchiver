@@ -109,20 +109,17 @@ public class Device {
         try {
             port.clearRTS();
             port.setDTR();
-            log.accept("DTR=on, RTS=off. Listening...");
+            log.accept("DTR=on, RTS=off.");
 
-            // Сначала слушаем - часы могут стримить данные сами
+            // ОРИГИНАЛЬНЫЙ ПРОТОКОЛ: сначала отправляем handshake, потом читаем ответ
+            log.accept("Sending handshake (0x56)...");
+            byte[] hs = {(byte) HANDSHAKE};
+            port.writeBytes(hs, 1);
+            sleep(DELAY);
+
+            // Читаем ответ
             byte[] rawBuf = new byte[256];
             int total = port.readBytes(rawBuf, rawBuf.length);
-
-            if (total <= 0) {
-                // Нет данных - пробуем handshake
-                log.accept("No stream. Sending handshake (0x56)...");
-                byte[] hs = {(byte) HANDSHAKE};
-                port.writeBytes(hs, 1);
-                sleep(DELAY);
-                total = port.readBytes(rawBuf, rawBuf.length);
-            }
 
             if (total <= 0) {
                 throw new IOException("No response from device");
@@ -146,31 +143,21 @@ public class Device {
                 throw new IOException("No recorded sleep data on the watch.");
             }
 
-            // Ищем handshake byte в потоке
-            int startIdx = -1;
-            for (int i = 0; i < total; i++) {
-                if ((rawBuf[i] & 0xFF) == HANDSHAKE) {
-                    startIdx = i;
-                    break;
-                }
-            }
-
-            if (startIdx < 0) {
-                // Нет handshake байта - возможно, данных сна нет или будильник был выключен
-                log.accept("WARNING: No handshake byte (0x56) found!");
+            // Проверяем, начинаются ли данные с handshake response (0x56)
+            if ((rawBuf[0] & 0xFF) != HANDSHAKE) {
+                log.accept("WARNING: Expected handshake response 0x56, got: 0x" + String.format("%02X", rawBuf[0] & 0xFF));
                 log.accept("Possible reasons:");
                 log.accept("1. Alarm was DISABLED - watch does not record sleep data without alarm");
                 log.accept("2. Watch is not in Date mode - scroll to Date screen on watch");
                 log.accept("3. No sleep data recorded yet");
-                log.accept("Expected format starts with 0x56, got: 0x" + String.format("%02X", rawBuf[0] & 0xFF));
-                throw new IOException("Invalid data format: no handshake byte found. Ensure alarm was ON and watch has sleep data.");
+                log.accept("4. Different protocol version or watch model");
+                throw new IOException("Invalid handshake response. Ensure alarm was ON and watch has sleep data.");
             }
 
-            InputStream in;
-            log.accept("Handshake found at pos " + startIdx);
-            byte[] remaining = new byte[total - startIdx - 1];
-            System.arraycopy(rawBuf, startIdx + 1, remaining, 0, remaining.length);
-            in = new java.io.SequenceInputStream(
+            // Создаем stream начиная со второго байта (после handshake)
+            byte[] remaining = new byte[total - 1];
+            System.arraycopy(rawBuf, 1, remaining, 0, remaining.length);
+            InputStream in = new java.io.SequenceInputStream(
                     new java.io.ByteArrayInputStream(remaining),
                     port.getInputStream());
 
