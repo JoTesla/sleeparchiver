@@ -117,13 +117,64 @@ public class Device {
             port.writeBytes(hs, 1);
             sleep(DELAY);
 
-            // Читаем ответ
-            byte[] rawBuf = new byte[256];
-            int total = port.readBytes(rawBuf, rawBuf.length);
+            // Читаем все пакеты в цикле (часы могут отдавать массив по частям)
+            java.util.List<byte[]> packets = new java.util.ArrayList<>();
+            int packetNum = 0;
 
-            if (total <= 0) {
-                throw new IOException("No response from device");
+            while (true) {
+                byte[] rawBuf = new byte[256];
+                int total = port.readBytes(rawBuf, rawBuf.length);
+
+                if (total <= 0) {
+                    if (packetNum == 0) {
+                        throw new IOException("No response from device");
+                    }
+                    log.accept("No more data. Total packets received: " + packetNum);
+                    break;
+                }
+
+                packetNum++;
+                byte[] packet = java.util.Arrays.copyOf(rawBuf, total);
+                packets.add(packet);
+                log.accept("=== PACKET " + packetNum + " (" + total + " bytes) ===");
+
+                // Сохраняем каждый пакет отдельно
+                try {
+                    String timestamp = java.time.LocalDateTime.now().format(
+                        java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+                    String filename = "packet_" + packetNum + "_" + timestamp + ".dat";
+                    java.nio.file.Path path = java.nio.file.Paths.get(filename);
+                    java.nio.file.Files.write(path, packet);
+                    log.accept("Packet " + packetNum + " saved to: " + filename);
+                } catch (Exception e) {
+                    log.accept("Failed to save packet: " + e.getMessage());
+                }
+
+                // Показываем сырые данные пакета
+                StringBuilder hex = new StringBuilder();
+                for (int i = 0; i < total; i++) {
+                    hex.append(String.format("%02X ", packet[i] & 0xFF));
+                }
+                log.accept("Hex: " + hex.toString().trim());
+
+                // Если пришло мало данных, возможно это последний пакет
+                if (total < 10) {
+                    log.accept("Small packet, might be end. Waiting for more...");
+                    sleep(100); // Небольшая пауза перед следующей попыткой
+                }
             }
+
+            // Объединяем все пакеты
+            int totalBytes = packets.stream().mapToInt(p -> p.length).sum();
+            byte[] rawBuf = new byte[totalBytes];
+            int offset = 0;
+            for (byte[] packet : packets) {
+                System.arraycopy(packet, 0, rawBuf, offset, packet.length);
+                offset += packet.length;
+            }
+            int total = totalBytes;
+
+            log.accept("=== COMBINED DATA: " + total + " bytes ===");
 
             // Дамп сырых данных
             StringBuilder hex = new StringBuilder();
