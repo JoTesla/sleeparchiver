@@ -144,56 +144,80 @@ public class Device {
             }
 
             // Проверяем, начинаются ли данные с handshake response (0x56)
-            if ((rawBuf[0] & 0xFF) != HANDSHAKE) {
-                log.accept("WARNING: Expected handshake response 0x56, got: 0x" + String.format("%02X", rawBuf[0] & 0xFF));
-                log.accept("Possible reasons:");
-                log.accept("1. Alarm was DISABLED - watch does not record sleep data without alarm");
-                log.accept("2. Watch is not in Date mode - scroll to Date screen on watch");
-                log.accept("3. No sleep data recorded yet");
-                log.accept("4. Different protocol version or watch model");
-                throw new IOException("Invalid handshake response. Ensure alarm was ON and watch has sleep data.");
+            InputStream in;
+            DeviceReader reader;
+
+            if ((rawBuf[0] & 0xFF) == HANDSHAKE) {
+                // Стандартный протокол: данные начинаются с handshake
+                log.accept("Handshake response found (0x56). Parsing data...");
+                byte[] remaining = new byte[total - 1];
+                System.arraycopy(rawBuf, 1, remaining, 0, remaining.length);
+                in = new java.io.SequenceInputStream(
+                        new java.io.ByteArrayInputStream(remaining),
+                        port.getInputStream());
+                reader = new DeviceReader(new BufferedInputStream(in), year);
+                reader._sum = 0;
+            } else {
+                // Альтернативный режим: данные без handshake (возможно другая модель часов)
+                log.accept("WARNING: No handshake response (0x56), got: 0x" + String.format("%02X", rawBuf[0] & 0xFF));
+                log.accept("Attempting to parse without handshake (alternative protocol)...");
+
+                // Парсим данные как есть, с начала
+                byte[] data = new byte[total];
+                System.arraycopy(rawBuf, 0, data, 0, total);
+                in = new java.io.SequenceInputStream(
+                        new java.io.ByteArrayInputStream(data),
+                        port.getInputStream());
+                reader = new DeviceReader(new BufferedInputStream(in), year);
+                // Не вызываем readHandshake(), парсим сразу
             }
 
-            // Создаем stream начиная со второго байта (после handshake)
-            byte[] remaining = new byte[total - 1];
-            System.arraycopy(rawBuf, 1, remaining, 0, remaining.length);
-            InputStream in = new java.io.SequenceInputStream(
-                    new java.io.ByteArrayInputStream(remaining),
-                    port.getInputStream());
+            try {
+                var date = reader.readDate();
+                log.accept("Date parsed: " + date);
 
-            DeviceReader reader = new DeviceReader(new BufferedInputStream(in), year);
-            reader._sum = 0;
-
-            var date = reader.readDate();
-            reader.skip();
-            int window = reader.readByte();
-            var toBed = reader.readTime();
-            var alarm = reader.readTime();
-
-            int count = reader.readByte();
-            log.accept("Date: " + date + ", moments: " + count);
-
-            List<LocalTime> moments = new ArrayList<>();
-            for (int i = 0; i < count; i++) {
-                moments.add(reader.readTime());
                 reader.skip();
+                int window = reader.readByte();
+                log.accept("Window: " + window + " min");
+
+                var toBed = reader.readTime();
+                log.accept("To bed: " + toBed);
+
+                var alarm = reader.readTime();
+                log.accept("Alarm: " + alarm);
+
+                int count = reader.readByte();
+                log.accept("Moments count: " + count);
+
+                List<LocalTime> moments = new ArrayList<>();
+                for (int i = 0; i < count; i++) {
+                    moments.add(reader.readTime());
+                    reader.skip();
+                }
+
+                int minutesLow = reader.readByte();
+                int minutesHigh = reader.readByte();
+
+                int dataChecksum = reader.getChecksum();
+                int checksum = reader.readByte();
+                if (dataChecksum != checksum) {
+                    log.accept("Checksum mismatch: " + dataChecksum + " vs " + checksum);
+                    throw new ProtocolException(String.format(
+                            "Incorrect checksum: %d, expected: %d", dataChecksum, checksum));
+                }
+
+                reader.readEnding();
+                log.accept("Data read successfully!");
+
+                return new Night(date, alarm, window, toBed, moments);
+            } catch (ProtocolException e) {
+                log.accept("Parse error: " + e.getMessage());
+                log.accept("This might indicate:");
+                log.accept("1. Alarm was OFF when sleeping");
+                log.accept("2. Data corruption or sync issue");
+                log.accept("3. Different watch model/firmware");
+                throw new IOException("Failed to parse watch data: " + e.getMessage(), e);
             }
-
-            int minutesLow = reader.readByte();
-            int minutesHigh = reader.readByte();
-
-            int dataChecksum = reader.getChecksum();
-            int checksum = reader.readByte();
-            if (dataChecksum != checksum) {
-                log.accept("Checksum mismatch: " + dataChecksum + " vs " + checksum);
-                throw new ProtocolException(String.format(
-                        "Incorrect checksum: %d, expected: %d", dataChecksum, checksum));
-            }
-
-            reader.readEnding();
-            log.accept("Data read successfully!");
-
-            return new Night(date, alarm, window, toBed, moments);
         } finally {
             port.closePort();
         }
