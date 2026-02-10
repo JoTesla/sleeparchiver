@@ -81,7 +81,7 @@ tasks.register<Exec>("jpackage") {
         "--input", inputDir.absolutePath,
         "--dest", outputDir.absolutePath,
         "--main-jar", tasks.jar.get().archiveFileName.get(),
-        "--main-class", "com.pavelfatin.sleeparchiver.SleepArchiver",
+        "--main-class", "com.pavelfatin.sleeparchiver.Launcher",
         "--name", "SleepArchiver",
         "--app-version", project.version.toString(),
         "--type", installerType,
