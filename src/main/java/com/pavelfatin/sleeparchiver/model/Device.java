@@ -155,29 +155,27 @@ public class Device {
                 }
             }
 
-            InputStream in;
-            if (startIdx >= 0) {
-                log.accept("Handshake found at pos " + startIdx);
-                byte[] remaining = new byte[total - startIdx - 1];
-                System.arraycopy(rawBuf, startIdx + 1, remaining, 0, remaining.length);
-                in = new java.io.SequenceInputStream(
-                        new java.io.ByteArrayInputStream(remaining),
-                        port.getInputStream());
-            } else {
-                log.accept("No handshake byte, parsing from start...");
-                byte[] data = new byte[total];
-                System.arraycopy(rawBuf, 0, data, 0, total);
-                in = new java.io.SequenceInputStream(
-                        new java.io.ByteArrayInputStream(data),
-                        port.getInputStream());
+            if (startIdx < 0) {
+                // Нет handshake байта - возможно, данных сна нет или будильник был выключен
+                log.accept("WARNING: No handshake byte (0x56) found!");
+                log.accept("Possible reasons:");
+                log.accept("1. Alarm was DISABLED - watch does not record sleep data without alarm");
+                log.accept("2. Watch is not in Date mode - scroll to Date screen on watch");
+                log.accept("3. No sleep data recorded yet");
+                log.accept("Expected format starts with 0x56, got: 0x" + String.format("%02X", rawBuf[0] & 0xFF));
+                throw new IOException("Invalid data format: no handshake byte found. Ensure alarm was ON and watch has sleep data.");
             }
 
+            InputStream in;
+            log.accept("Handshake found at pos " + startIdx);
+            byte[] remaining = new byte[total - startIdx - 1];
+            System.arraycopy(rawBuf, startIdx + 1, remaining, 0, remaining.length);
+            in = new java.io.SequenceInputStream(
+                    new java.io.ByteArrayInputStream(remaining),
+                    port.getInputStream());
+
             DeviceReader reader = new DeviceReader(new BufferedInputStream(in), year);
-            if (startIdx < 0) {
-                // Пропускаем readHandshake если не нашли его
-            } else {
-                reader._sum = 0;
-            }
+            reader._sum = 0;
 
             var date = reader.readDate();
             reader.skip();
