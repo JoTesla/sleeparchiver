@@ -54,7 +54,8 @@ public class DeviceReader {
         try {
             return LocalTime.of(hours, minutes);
         } catch (java.time.DateTimeException e) {
-            throw new ProtocolException(e);
+            throw new ProtocolException(String.format(
+                "Invalid time: %02d:%02d (hours: 0-23, minutes: 0-59)", hours, minutes));
         }
     }
 

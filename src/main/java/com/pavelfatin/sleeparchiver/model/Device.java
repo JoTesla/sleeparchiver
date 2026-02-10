@@ -139,6 +139,18 @@ public class Device {
             log.accept(hex.toString().trim());
             log.accept("Dec: " + dec.toString().trim());
 
+            // Сохранение сырых данных в файл для анализа
+            try {
+                String timestamp = java.time.LocalDateTime.now().format(
+                    java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+                String filename = "raw_data_" + timestamp + ".dat";
+                java.nio.file.Path path = java.nio.file.Paths.get(filename);
+                java.nio.file.Files.write(path, java.util.Arrays.copyOf(rawBuf, total));
+                log.accept("Raw data saved to: " + path.toAbsolutePath());
+            } catch (Exception e) {
+                log.accept("Failed to save raw data: " + e.getMessage());
+            }
+
             if (allZeros) {
                 throw new IOException("No recorded sleep data on the watch.");
             }
@@ -196,13 +208,20 @@ public class Device {
                 // Не вызываем readHandshake(), парсим сразу
             }
 
+            // Детальный анализ байтов
+            log.accept("=== BYTE-BY-BYTE ANALYSIS ===");
+            for (int i = 0; i < Math.min(total, 20); i++) {
+                log.accept(String.format("[%02d] 0x%02X (%3d)", i, rawBuf[i] & 0xFF, rawBuf[i] & 0xFF));
+            }
+            log.accept("=== END ANALYSIS ===");
+
             try {
                 var date = reader.readDate();
                 log.accept("Date parsed: " + date);
 
                 reader.skip();
                 int window = reader.readByte();
-                log.accept("Window: " + window + " min");
+                log.accept("Window: " + window + " min" + (window > 90 ? " (INVALID!)" : ""));
 
                 var toBed = reader.readTime();
                 log.accept("To bed: " + toBed);
@@ -211,7 +230,7 @@ public class Device {
                 log.accept("Alarm: " + alarm);
 
                 int count = reader.readByte();
-                log.accept("Moments count: " + count);
+                log.accept("Moments count: " + count + (count > 50 ? " (SUSPICIOUS!)" : ""));
 
                 List<LocalTime> moments = new ArrayList<>();
                 for (int i = 0; i < count; i++) {
