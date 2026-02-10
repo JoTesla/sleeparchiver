@@ -85,7 +85,7 @@ public class MainView extends BorderPane {
     private MenuItem _redoMenuItem;
     private Menu _recentMenu;
     private ComboBox<String> _portCombo;
-    private ComboBox<Integer> _baudCombo;
+    private ComboBox<WatchModel> _modelCombo;
 
     public MainView(Stage stage, Document document, Preferences preferences) {
         _stage = stage;
@@ -250,10 +250,9 @@ public class MainView extends BorderPane {
         _portCombo.setPrefWidth(250);
         refreshPorts();
 
-        _baudCombo = new ComboBox<>(FXCollections.observableArrayList(
-                2400, 4800, 9600, 19200, 38400, 57600, 115200));
-        _baudCombo.setValue(19200);
-        _baudCombo.setPrefWidth(90);
+        _modelCombo = new ComboBox<>(FXCollections.observableArrayList(WatchModel.values()));
+        _modelCombo.setValue(WatchModel.PRO);
+        _modelCombo.setPrefWidth(180);
 
         Button refreshBtn = new Button(t("toolbar.refresh"));
         refreshBtn.setOnAction(e -> refreshPorts());
@@ -265,7 +264,7 @@ public class MainView extends BorderPane {
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
         ToolBar toolBar = new ToolBar(addBtn, editBtn, removeBtn, new Separator(),
-                _portCombo, _baudCombo, refreshBtn, acquireBtn, new Separator(),
+                _portCombo, _modelCombo, refreshBtn, acquireBtn, new Separator(),
                 spacer, transformCombo, zoomCombo);
         return toolBar;
     }
@@ -581,8 +580,8 @@ public class MainView extends BorderPane {
         if (selected != null && !selected.isEmpty()) {
             portName = selected.substring(0, selected.indexOf(' '));
         }
-        int baudRate = _baudCombo.getValue() != null ? _baudCombo.getValue() : 19200;
-        DownloadDialog dialog = new DownloadDialog(_stage, java.time.LocalDate.now().getYear(), portName, baudRate);
+        WatchModel model = _modelCombo.getValue() != null ? _modelCombo.getValue() : WatchModel.PRO;
+        DownloadDialog dialog = new DownloadDialog(_stage, java.time.LocalDate.now().getYear(), portName, model);
         Optional<Night> result = dialog.showAndWait();
         result.ifPresent(this::doAddNight);
     }

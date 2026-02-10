@@ -20,6 +20,7 @@ package com.pavelfatin.sleeparchiver.gui.download;
 
 import com.pavelfatin.sleeparchiver.model.Device;
 import com.pavelfatin.sleeparchiver.model.Night;
+import com.pavelfatin.sleeparchiver.model.WatchModel;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.scene.control.*;
@@ -30,7 +31,7 @@ import javafx.stage.Stage;
 import static com.pavelfatin.sleeparchiver.lang.I18n.t;
 
 public class DownloadDialog extends Dialog<Night> {
-    public DownloadDialog(Stage owner, int year, String portName, int baudRate) {
+    public DownloadDialog(Stage owner, int year, String portName, WatchModel model) {
         initOwner(owner);
         setTitle(t("download.title"));
         setResizable(true);
@@ -55,7 +56,7 @@ public class DownloadDialog extends Dialog<Night> {
 
         setOnShowing(e -> {
             Thread thread = new Thread(() -> {
-                Device device = new Device("SleepArchiver", year, baudRate, msg ->
+                Device device = new Device("SleepArchiver", year, model, msg ->
                         Platform.runLater(() -> {
                             logArea.appendText(msg + "\n");
                             logArea.setScrollTop(Double.MAX_VALUE);
