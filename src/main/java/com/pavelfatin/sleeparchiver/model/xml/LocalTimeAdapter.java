@@ -32,6 +32,6 @@ public class LocalTimeAdapter extends XmlAdapter<String, LocalTime> {
 
     @Override
     public String marshal(LocalTime v) {
-        return v == null ? "" : v.format(FORMAT);
+        return v == null ? null : v.format(FORMAT);
     }
 }
