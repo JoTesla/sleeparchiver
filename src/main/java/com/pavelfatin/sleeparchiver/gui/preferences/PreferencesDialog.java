@@ -41,6 +41,7 @@ public class PreferencesDialog extends Dialog<Void> {
     private final Spinner<Integer> _historyLimit;
     private final CheckBox _openRecent;
 
+    private final CheckBox _debugLogging;
     private final CheckBox _manualGrid;
     private final ComboBox<Integer> _gridFrom;
     private final ComboBox<Integer> _gridTo;
@@ -80,6 +81,10 @@ public class PreferencesDialog extends Dialog<Void> {
         });
         _historyLimit.setDisable(!preferences.isHistoryEnabled());
         _openRecent.setDisable(!preferences.isHistoryEnabled());
+
+        // Debug logging
+        _debugLogging = new CheckBox(t("preferences.debugLogging"));
+        _debugLogging.setSelected(preferences.isDebugLogging());
 
         // Grid section
         _manualGrid = new CheckBox(t("preferences.manualGrid"));
@@ -134,6 +139,7 @@ public class PreferencesDialog extends Dialog<Void> {
         general.add(new Label(t("preferences.restart")), 2, 0);
         general.add(_backups, 0, 1, 3, 1);
         general.add(_prefill, 0, 2, 3, 1);
+        general.add(_debugLogging, 0, 3, 3, 1);
         generalPane.setContent(general);
 
         // History pane
@@ -191,6 +197,7 @@ public class PreferencesDialog extends Dialog<Void> {
         _preferences.setHistoryLimit(_historyLimit.getValue());
         _preferences.setOpenRecentEnabled(_openRecent.isSelected());
 
+        _preferences.setDebugLogging(_debugLogging.isSelected());
         _preferences.setManualGrid(_manualGrid.isSelected());
         _preferences.setGridStartHour(_gridFrom.getValue());
         _preferences.setGridEndHour(_gridTo.getValue());

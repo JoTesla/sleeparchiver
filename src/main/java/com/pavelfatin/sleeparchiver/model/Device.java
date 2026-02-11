@@ -43,19 +43,27 @@ public class Device {
     private WatchModel _model;
     private Consumer<String> _logger;
     private PrintWriter _fileLog;
+    private boolean _debugLogging;
 
     public Device(String app, int year, WatchModel model) {
-        this(app, year, model, null);
+        this(app, year, model, null, false);
     }
 
-    public Device(String app, int year, WatchModel model, Consumer<String> logger) {
+    public Device(String app, int year, WatchModel model, Consumer<String> logger, boolean debugLogging) {
         _app = app;
         _year = year;
         _model = model;
         _logger = logger;
+        _debugLogging = debugLogging;
     }
 
     private void log(String msg) {
+        if (!_debugLogging) {
+            if (_logger != null) {
+                _logger.accept(msg);
+            }
+            return;
+        }
         System.out.println(msg);
         if (_logger != null) {
             _logger.accept(msg);
@@ -67,6 +75,7 @@ public class Device {
     }
 
     private void openFileLog() {
+        if (!_debugLogging) return;
         try {
             Path logsDir = Paths.get("logs");
             Files.createDirectories(logsDir);
@@ -393,6 +402,7 @@ public class Device {
     }
 
     private void saveRawData(byte[] data, int length) {
+        if (!_debugLogging) return;
         try {
             Path logsDir = Paths.get("logs");
             Files.createDirectories(logsDir);

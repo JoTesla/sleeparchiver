@@ -74,6 +74,10 @@ public class Preferences {
     @XmlElement(name = "displayMonth", namespace = "")
     private String _displayMonth;
 
+    // Debug logging
+    @XmlElement(name = "debugLogging", namespace = "")
+    private boolean _debugLogging;
+
     // Last port/model
     @XmlElement(name = "lastPort", namespace = "")
     private String _lastPort;
@@ -137,6 +141,14 @@ public class Preferences {
 
     public void setOpenRecentEnabled(boolean enabled) {
         _openRecent = enabled;
+    }
+
+    public boolean isDebugLogging() {
+        return _debugLogging;
+    }
+
+    public void setDebugLogging(boolean enabled) {
+        _debugLogging = enabled;
     }
 
     public boolean isManualGrid() {
@@ -305,6 +317,7 @@ public class Preferences {
                 && _history == other._history
                 && _historyLimit == other._historyLimit
                 && _openRecent == other._openRecent
+                && _debugLogging == other._debugLogging
                 && _manualGrid == other._manualGrid
                 && _gridStartHour == other._gridStartHour
                 && _gridEndHour == other._gridEndHour
@@ -322,7 +335,7 @@ public class Preferences {
     public int hashCode() {
         return Objects.hash(_file, _language, _backups, _prefill,
                 _history, _historyLimit, _openRecent, _files,
-                _manualGrid, _gridStartHour, _gridEndHour,
+                _debugLogging, _manualGrid, _gridStartHour, _gridEndHour,
                 _displayMode, _displayDays, _displayMonth,
                 _lastPort, _lastModel);
     }

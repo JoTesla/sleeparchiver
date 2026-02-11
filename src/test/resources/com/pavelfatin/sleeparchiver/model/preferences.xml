@@ -15,4 +15,5 @@
     <gridEndHour>10</gridEndHour>
     <displayMode>month</displayMode>
     <displayDays>30</displayDays>
+    <debugLogging>false</debugLogging>
 </preferences>

@@ -31,7 +31,7 @@ import javafx.stage.Stage;
 import static com.pavelfatin.sleeparchiver.lang.I18n.t;
 
 public class DownloadDialog extends Dialog<Night> {
-    public DownloadDialog(Stage owner, int year, String portName, WatchModel model) {
+    public DownloadDialog(Stage owner, int year, String portName, WatchModel model, boolean debugLogging) {
         initOwner(owner);
         setTitle(t("download.title"));
         setResizable(true);
@@ -60,7 +60,7 @@ public class DownloadDialog extends Dialog<Night> {
                         Platform.runLater(() -> {
                             logArea.appendText(msg + "\n");
                             logArea.setScrollTop(Double.MAX_VALUE);
-                        }));
+                        }), debugLogging);
                 Night night = device.readData(portName);
                 if (night != null) {
                     Platform.runLater(() -> {

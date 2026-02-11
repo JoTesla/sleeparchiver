@@ -757,7 +757,7 @@ public class MainView extends BorderPane {
         // Save port/model selection
         savePortAndModel();
 
-        DownloadDialog dialog = new DownloadDialog(_stage, java.time.LocalDate.now().getYear(), portName, model);
+        DownloadDialog dialog = new DownloadDialog(_stage, java.time.LocalDate.now().getYear(), portName, model, _preferences.isDebugLogging());
         Optional<Night> result = dialog.showAndWait();
         result.ifPresent(this::doAddNight);
     }
