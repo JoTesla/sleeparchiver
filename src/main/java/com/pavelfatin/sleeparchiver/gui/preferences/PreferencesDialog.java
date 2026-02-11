@@ -20,9 +20,11 @@ package com.pavelfatin.sleeparchiver.gui.preferences;
 
 import com.pavelfatin.sleeparchiver.model.Language;
 import com.pavelfatin.sleeparchiver.model.Preferences;
+import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.scene.control.*;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
@@ -38,6 +40,14 @@ public class PreferencesDialog extends Dialog<Void> {
     private final CheckBox _historyEnabled;
     private final Spinner<Integer> _historyLimit;
     private final CheckBox _openRecent;
+
+    private final CheckBox _manualGrid;
+    private final ComboBox<Integer> _gridFrom;
+    private final ComboBox<Integer> _gridTo;
+
+    private final ToggleGroup _displayGroup;
+    private final RadioButton _displayMonthRadio;
+    private final RadioButton _displayDaysRadio;
 
     public PreferencesDialog(Stage owner, Preferences preferences) {
         _preferences = preferences;
@@ -71,9 +81,47 @@ public class PreferencesDialog extends Dialog<Void> {
         _historyLimit.setDisable(!preferences.isHistoryEnabled());
         _openRecent.setDisable(!preferences.isHistoryEnabled());
 
+        // Grid section
+        _manualGrid = new CheckBox(t("preferences.manualGrid"));
+        _manualGrid.setSelected(preferences.isManualGrid());
+
+        _gridFrom = new ComboBox<>(FXCollections.observableArrayList(
+                0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+                13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23));
+        _gridFrom.setValue(preferences.getGridStartHour());
+        _gridFrom.setPrefWidth(70);
+
+        _gridTo = new ComboBox<>(FXCollections.observableArrayList(
+                0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+                13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23));
+        _gridTo.setValue(preferences.getGridEndHour());
+        _gridTo.setPrefWidth(70);
+
+        _manualGrid.selectedProperty().addListener((obs, oldV, newV) -> {
+            _gridFrom.setDisable(!newV);
+            _gridTo.setDisable(!newV);
+        });
+        _gridFrom.setDisable(!preferences.isManualGrid());
+        _gridTo.setDisable(!preferences.isManualGrid());
+
+        // Display section
+        _displayGroup = new ToggleGroup();
+        _displayMonthRadio = new RadioButton(t("preferences.displayMonth"));
+        _displayMonthRadio.setToggleGroup(_displayGroup);
+        _displayDaysRadio = new RadioButton(t("preferences.displayDays"));
+        _displayDaysRadio.setToggleGroup(_displayGroup);
+
+        if ("days".equals(preferences.getDisplayMode())) {
+            _displayDaysRadio.setSelected(true);
+        } else {
+            _displayMonthRadio.setSelected(true);
+        }
+
+        // Layout
         VBox content = new VBox(10);
         content.setPadding(new Insets(10));
 
+        // General pane
         TitledPane generalPane = new TitledPane();
         generalPane.setText(t("preferences.general"));
         generalPane.setCollapsible(false);
@@ -88,6 +136,7 @@ public class PreferencesDialog extends Dialog<Void> {
         general.add(_prefill, 0, 2, 3, 1);
         generalPane.setContent(general);
 
+        // History pane
         TitledPane historyPane = new TitledPane();
         historyPane.setText(t("preferences.history"));
         historyPane.setCollapsible(false);
@@ -100,7 +149,28 @@ public class PreferencesDialog extends Dialog<Void> {
         history.getChildren().addAll(_historyEnabled, _openRecent, historyGrid);
         historyPane.setContent(history);
 
-        content.getChildren().addAll(generalPane, historyPane);
+        // Grid pane
+        TitledPane gridPane = new TitledPane();
+        gridPane.setText(t("preferences.grid"));
+        gridPane.setCollapsible(false);
+        VBox gridBox = new VBox(5);
+        gridBox.setPadding(new Insets(5));
+        HBox gridHours = new HBox(10,
+                new Label(t("preferences.gridFrom")), _gridFrom,
+                new Label(t("preferences.gridTo")), _gridTo);
+        gridBox.getChildren().addAll(_manualGrid, gridHours);
+        gridPane.setContent(gridBox);
+
+        // Display pane
+        TitledPane displayPane = new TitledPane();
+        displayPane.setText(t("preferences.display"));
+        displayPane.setCollapsible(false);
+        VBox displayBox = new VBox(5);
+        displayBox.setPadding(new Insets(5));
+        displayBox.getChildren().addAll(_displayMonthRadio, _displayDaysRadio);
+        displayPane.setContent(displayBox);
+
+        content.getChildren().addAll(generalPane, historyPane, gridPane, displayPane);
 
         getDialogPane().setContent(content);
         getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
@@ -120,6 +190,13 @@ public class PreferencesDialog extends Dialog<Void> {
         _preferences.setHistoryEnabled(_historyEnabled.isSelected());
         _preferences.setHistoryLimit(_historyLimit.getValue());
         _preferences.setOpenRecentEnabled(_openRecent.isSelected());
+
+        _preferences.setManualGrid(_manualGrid.isSelected());
+        _preferences.setGridStartHour(_gridFrom.getValue());
+        _preferences.setGridEndHour(_gridTo.getValue());
+
+        _preferences.setDisplayMode(_displayDaysRadio.isSelected() ? "days" : "month");
+
         try {
             _preferences.save();
         } catch (IOException e) {

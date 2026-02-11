@@ -35,11 +35,12 @@ import java.util.List;
 import java.util.Locale;
 
 public class NightRenderer {
-    private static final int H_GAP = 11;
+    public static final int H_GAP = 11;
     private static final int ROW_HEIGHT = 100;
 
     private static final Font FONT_BOLD = Font.font("Arial", FontWeight.BOLD, 12);
     private static final Font FONT_PLAIN = Font.font("Arial", FontWeight.NORMAL, 12);
+    private static final Font FONT_AXIS = Font.font("Arial", 9);
 
     private static final Color COLOR_BLUE = Color.rgb(0, 0, 148);
     private static final Color COLOR_GREEN = Color.rgb(0, 110, 0);
@@ -47,6 +48,8 @@ public class NightRenderer {
     private static final Color COLOR_SELECTED_BORDER = Color.rgb(153, 153, 153);
     private static final Color COLOR_SELECTED_BACKGROUND = Color.rgb(255, 255, 233);
     private static final Color COLOR_HOLIDAY = Color.rgb(180, 0, 0);
+    private static final Color COLOR_GRID = Color.rgb(220, 220, 220);
+    private static final Color COLOR_AXIS_TEXT = Color.rgb(140, 140, 140);
 
     private static final Color COLOR_EASE_HARD = Color.web("#FF4040");
     private static final Color COLOR_EASE_NORMAL = Color.web("#BBBBBB");
@@ -130,8 +133,32 @@ public class NightRenderer {
             if (night.hasWindow()) {
                 drawWindow(g, night);
             }
+            drawTimeGrid(g, h);
             drawMoments(g, spans);
             drawLengths(g, spans);
+        }
+    }
+
+    public void renderTimeAxis(Canvas canvas, boolean isTop) {
+        GraphicsContext g = canvas.getGraphicsContext2D();
+        double w = canvas.getWidth();
+        double h = canvas.getHeight();
+        g.clearRect(0, 0, w, h);
+
+        if (!(_transform instanceof GridTransform grid)) return;
+        int start = grid.getEffectiveStartMinutes();
+        int end = grid.getEffectiveEndMinutes();
+        int firstHour = ((start + 59) / 60) * 60;
+
+        g.setFont(FONT_AXIS);
+        g.setFill(COLOR_AXIS_TEXT);
+        double textY = isTop ? h - 2 : 10;
+        for (int m = firstHour; m <= end; m += 60) {
+            int hour = (m / 60) % 24;
+            String label = String.format("%d:00", hour);
+            double tw = textWidth(label, FONT_AXIS);
+            double x = H_GAP + _transform.toWidth(m - start);
+            g.fillText(label, x - tw / 2, textY);
         }
     }
 
@@ -161,14 +188,13 @@ public class NightRenderer {
     private void drawEquation(GraphicsContext g, int x1, int x2, int y, Metrics metrics) {
         g.setFont(FONT_BOLD);
         g.setFill(COLOR_BLUE);
-        SleepInstant durationInstant = new SleepInstant(metrics.getDuration());
-        String duration = String.format("%d:%02d",
-                durationInstant.time().getHour(), durationInstant.time().getMinute());
-        String equation = String.format("%s / %d = %d",
-                duration, metrics.getSpansCount(), metrics.getAverage());
-        double gaps = x2 - x1 - textWidth(equation, FONT_BOLD);
-        double x = x1 + Math.round(gaps / 2.0);
-        g.fillText(equation, x, y);
+        int totalMinutes = metrics.getDuration();
+        int hours = totalMinutes / 60;
+        int mins = totalMinutes % 60;
+        String duration = hours > 0 ? String.format("%dч %02dм", hours, mins) : String.format("%dм", mins);
+        String text = String.format("Сон: %s | %d пробужд. | ~%d мин",
+                duration, metrics.getBreaksCount(), metrics.getAverage());
+        g.fillText(text, x1 + 2, y);
     }
 
     private void drawAlarm(GraphicsContext g, int x, int y) {
@@ -181,21 +207,20 @@ public class NightRenderer {
     private void drawFrame(GraphicsContext g, double w, double h, boolean selected, boolean focused) {
         if (selected) {
             g.setFill(COLOR_SELECTED_BACKGROUND);
-            g.fillRoundRect(2, 2, w - 5, h - 5, 15, 15);
+            g.fillRoundRect(2, 2, w - 4, h - 4, 15, 15);
         }
 
         g.setStroke(COLOR_FRAME);
         g.setLineWidth(1);
 
-        g.strokeLine(3, 29, w - 4, 29);
+        g.strokeLine(3, 29, w - 3, 29);
 
         g.strokeLine(114, 6, 114, 6 + 22);
         g.strokeLine(175, 6, 175, 6 + 22);
         g.strokeLine(208, 6, 208, 6 + 22);
-        g.strokeLine(302, 6, 302, 6 + 22);
 
         g.setStroke(focused ? Color.BLACK : COLOR_SELECTED_BORDER);
-        g.strokeRoundRect(2, 2, w - 5, h - 5, 15, 15);
+        g.strokeRoundRect(2, 2, w - 4, h - 4, 15, 15);
     }
 
     private Color backgroundOf(boolean selected) {
@@ -239,7 +264,10 @@ public class NightRenderer {
         g.setFont(FONT_PLAIN);
         g.setFill(Color.BLACK);
         for (SleepSpan span : spans) {
-            String length = String.format("%d", span.toMinutes());
+            int mins = span.toMinutes();
+            String length = mins >= 60
+                    ? String.format("%dч %dм", mins / 60, mins % 60)
+                    : String.format("%dм", mins);
             double tw = textWidth(length, FONT_PLAIN);
             double th = textHeight(length, FONT_PLAIN);
             double[] r = rectangleOf(span);
@@ -292,9 +320,41 @@ public class NightRenderer {
         return new double[]{x1, y1, x2 - x1, y2 - y1};
     }
 
+    private void drawTimeGrid(GraphicsContext g, double cellHeight) {
+        if (!(_transform instanceof GridTransform grid)) return;
+        int start = grid.getEffectiveStartMinutes();
+        int end = grid.getEffectiveEndMinutes();
+        int firstHour = ((start + 59) / 60) * 60;
+
+        g.setStroke(COLOR_GRID);
+        g.setLineWidth(1);
+        for (int m = firstHour; m <= end; m += 60) {
+            double x = H_GAP + _transform.toWidth(m - start);
+            g.strokeLine(x, 30, x, cellHeight - 5);
+        }
+    }
+
     private static Color colorOf(SleepSpan span) {
-        int c = Math.min(span.toMinutes() / 3, 127);
-        return Color.rgb(127 - c, 212 - c, 255 - c);
+        int m = span.toMinutes();
+        if (m < 15) {
+            double t = m / 15.0;
+            return Color.rgb(
+                    (int) (240 - t * 40),
+                    (int) (100 + t * 70),
+                    (int) (60 + t * 50));
+        } else if (m <= 45) {
+            double t = (m - 15) / 30.0;
+            return Color.rgb(
+                    (int) (120 - t * 50),
+                    (int) (190 - t * 40),
+                    (int) (235 - t * 15));
+        } else {
+            double t = Math.min((m - 45) / 60.0, 1.0);
+            return Color.rgb(
+                    (int) (60 + t * 20),
+                    (int) (80 - t * 20),
+                    (int) (190 - t * 20));
+        }
     }
 
     private static Color easeColor(Ease ease) {

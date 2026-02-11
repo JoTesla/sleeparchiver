@@ -10,4 +10,9 @@
         <file>file B</file>
         <file>file A</file>
     </files>
+    <manualGrid>false</manualGrid>
+    <gridStartHour>22</gridStartHour>
+    <gridEndHour>10</gridEndHour>
+    <displayMode>month</displayMode>
+    <displayDays>30</displayDays>
 </preferences>

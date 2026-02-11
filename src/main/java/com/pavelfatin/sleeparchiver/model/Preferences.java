@@ -54,6 +54,33 @@ public class Preferences {
     @XmlElementWrapper(name = "files", namespace = "")
     private List<String> _files = new ArrayList<>();
 
+    // Grid settings
+    @XmlElement(name = "manualGrid", namespace = "")
+    private boolean _manualGrid;
+
+    @XmlElement(name = "gridStartHour", namespace = "")
+    private int _gridStartHour = 22;
+
+    @XmlElement(name = "gridEndHour", namespace = "")
+    private int _gridEndHour = 10;
+
+    // Display settings
+    @XmlElement(name = "displayMode", namespace = "")
+    private String _displayMode = "month";
+
+    @XmlElement(name = "displayDays", namespace = "")
+    private int _displayDays = 30;
+
+    @XmlElement(name = "displayMonth", namespace = "")
+    private String _displayMonth;
+
+    // Last port/model
+    @XmlElement(name = "lastPort", namespace = "")
+    private String _lastPort;
+
+    @XmlElement(name = "lastModel", namespace = "")
+    private String _lastModel;
+
 
     public Preferences() {
     }
@@ -110,6 +137,70 @@ public class Preferences {
 
     public void setOpenRecentEnabled(boolean enabled) {
         _openRecent = enabled;
+    }
+
+    public boolean isManualGrid() {
+        return _manualGrid;
+    }
+
+    public void setManualGrid(boolean manual) {
+        _manualGrid = manual;
+    }
+
+    public int getGridStartHour() {
+        return _gridStartHour;
+    }
+
+    public void setGridStartHour(int hour) {
+        _gridStartHour = hour;
+    }
+
+    public int getGridEndHour() {
+        return _gridEndHour;
+    }
+
+    public void setGridEndHour(int hour) {
+        _gridEndHour = hour;
+    }
+
+    public String getDisplayMode() {
+        return _displayMode;
+    }
+
+    public void setDisplayMode(String mode) {
+        _displayMode = mode;
+    }
+
+    public int getDisplayDays() {
+        return _displayDays;
+    }
+
+    public void setDisplayDays(int days) {
+        _displayDays = days;
+    }
+
+    public String getDisplayMonth() {
+        return _displayMonth;
+    }
+
+    public void setDisplayMonth(String month) {
+        _displayMonth = month;
+    }
+
+    public String getLastPort() {
+        return _lastPort;
+    }
+
+    public void setLastPort(String port) {
+        _lastPort = port;
+    }
+
+    public String getLastModel() {
+        return _lastModel;
+    }
+
+    public void setLastModel(String model) {
+        _lastModel = model;
     }
 
     public String getRecentFile() {
@@ -214,15 +305,26 @@ public class Preferences {
                 && _history == other._history
                 && _historyLimit == other._historyLimit
                 && _openRecent == other._openRecent
+                && _manualGrid == other._manualGrid
+                && _gridStartHour == other._gridStartHour
+                && _gridEndHour == other._gridEndHour
+                && _displayDays == other._displayDays
                 && Objects.equals(_file, other._file)
                 && Objects.equals(_language, other._language)
-                && Objects.equals(_files, other._files);
+                && Objects.equals(_files, other._files)
+                && Objects.equals(_displayMode, other._displayMode)
+                && Objects.equals(_displayMonth, other._displayMonth)
+                && Objects.equals(_lastPort, other._lastPort)
+                && Objects.equals(_lastModel, other._lastModel);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(_file, _language, _backups, _prefill,
-                _history, _historyLimit, _openRecent, _files);
+                _history, _historyLimit, _openRecent, _files,
+                _manualGrid, _gridStartHour, _gridEndHour,
+                _displayMode, _displayDays, _displayMonth,
+                _lastPort, _lastModel);
     }
 
     @Override

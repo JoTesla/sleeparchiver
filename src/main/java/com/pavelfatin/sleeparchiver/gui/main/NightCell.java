@@ -42,7 +42,7 @@ public class NightCell extends ListCell<Night> {
         if (empty || night == null) {
             setGraphic(null);
         } else {
-            _canvas.setWidth(getListView().getWidth() - 20);
+            _canvas.setWidth(getListView().getWidth() - 4);
             _renderer.render(_canvas, night, isSelected(), isFocused());
             setGraphic(_canvas);
         }

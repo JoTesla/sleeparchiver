@@ -20,11 +20,15 @@ package com.pavelfatin.sleeparchiver.model;
 
 import com.fazecast.jSerialComm.SerialPort;
 
-import java.io.BufferedInputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -38,6 +42,7 @@ public class Device {
     private int _year;
     private WatchModel _model;
     private Consumer<String> _logger;
+    private PrintWriter _fileLog;
 
     public Device(String app, int year, WatchModel model) {
         this(app, year, model, null);
@@ -55,6 +60,30 @@ public class Device {
         if (_logger != null) {
             _logger.accept(msg);
         }
+        if (_fileLog != null) {
+            _fileLog.println(msg);
+            _fileLog.flush();
+        }
+    }
+
+    private void openFileLog() {
+        try {
+            Path logsDir = Paths.get("logs");
+            Files.createDirectories(logsDir);
+            String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+            Path logFile = logsDir.resolve("acquire_" + ts + ".log");
+            _fileLog = new PrintWriter(new FileWriter(logFile.toFile()), true);
+            log("Log file: " + logFile.toAbsolutePath());
+        } catch (IOException e) {
+            System.err.println("Failed to create log file: " + e.getMessage());
+        }
+    }
+
+    private void closeFileLog() {
+        if (_fileLog != null) {
+            _fileLog.close();
+            _fileLog = null;
+        }
     }
 
     public static List<String> listPorts() {
@@ -69,28 +98,33 @@ public class Device {
     }
 
     public Night readData(String portName) {
-        if (portName != null) {
-            SerialPort port = SerialPort.getCommPort(portName);
-            try {
-                log("Port: " + portName + " @ " + _model.getBaudRate() + " [" + _model.getDisplayName() + "]");
-                return readNight(port);
-            } catch (ProtocolException e) {
-                log("Protocol error: " + e.getMessage());
-            } catch (IOException e) {
-                log("IO error: " + e.getMessage());
+        openFileLog();
+        try {
+            if (portName != null) {
+                SerialPort port = SerialPort.getCommPort(portName);
+                try {
+                    log("Port: " + portName + " @ " + _model.getBaudRate() + " [" + _model.getDisplayName() + "]");
+                    return readNight(port);
+                } catch (ProtocolException e) {
+                    log("Protocol error: " + e.getMessage());
+                } catch (IOException e) {
+                    log("IO error: " + e.getMessage());
+                }
+                return null;
+            }
+
+            SerialPort[] ports = SerialPort.getCommPorts();
+            for (SerialPort port : ports) {
+                try {
+                    return readNight(port);
+                } catch (IOException e) {
+                    // skip
+                }
             }
             return null;
+        } finally {
+            closeFileLog();
         }
-
-        SerialPort[] ports = SerialPort.getCommPorts();
-        for (SerialPort port : ports) {
-            try {
-                return readNight(port);
-            } catch (IOException e) {
-                // skip
-            }
-        }
-        return null;
     }
 
     private Night readNight(SerialPort port) throws IOException {
@@ -118,27 +152,57 @@ public class Device {
         }
 
         try {
+            // Flush входного буфера (могут быть данные от предыдущих попыток)
+            byte[] discard = new byte[256];
+            while (port.readBytes(discard, discard.length) > 0) { /* drain */ }
+
             EliteProtocol proto = new EliteProtocol(port, _year, this::log);
 
-            if (_model == WatchModel.ELITE2) {
-                log("Trying flash log (Elite2)...");
-                byte[] flashData = proto.readFlashLog();
-                if (flashData != null && flashData.length > 26) {
-                    log("Parsing flash log...");
+            // Порядок как в оригинальном ПО: flashLog -> date -> time -> alarm -> events -> name
+            byte[] flashData = null;
+            try { flashData = proto.readFlashLog(); } catch (Exception e) { log("readFlashLog failed: " + e.getMessage()); }
+
+            java.time.LocalDate date = null;
+            try { date = proto.readDate(); } catch (Exception e) { log("readDate failed: " + e.getMessage()); }
+
+            LocalTime time = null;
+            try { time = proto.readTime(); } catch (Exception e) { log("readTime failed: " + e.getMessage()); }
+
+            EliteProtocol.AlarmInfo alarmInfo = null;
+            try { alarmInfo = proto.readAlarm(); } catch (Exception e) { log("readAlarm failed: " + e.getMessage()); }
+
+            List<LocalTime> events = null;
+            try { events = proto.readEvents(); } catch (Exception e) { log("readEvents failed: " + e.getMessage()); }
+
+            String deviceName = null;
+            try { deviceName = proto.readDeviceName(); } catch (Exception e) { log("readDeviceName failed: " + e.getMessage()); }
+
+            // Пробуем собрать Night
+            log("--- Building Night ---");
+
+            // Elite2: сначала пробуем flash log
+            if (_model == WatchModel.ELITE2 && flashData != null && flashData.length > 26) {
+                try {
                     Night night = Elite2Protocol.parseFlashLog(flashData);
                     log("Flash log parsed: " + night.getDate());
                     return night;
+                } catch (Exception e) {
+                    log("Flash log parse failed: " + e.getMessage());
                 }
-                log("Flash log empty, falling back to Elite commands...");
             }
 
-            // Стандартный Elite протокол
-            var date = proto.readDate();
-            var alarmInfo = proto.readAlarm();
-            var events = proto.readEvents();
+            // Собираем из отдельных команд
+            if (date == null) {
+                throw new IOException("Failed to read date from device");
+            }
+            LocalTime alarm = alarmInfo != null ? alarmInfo.alarmTime() : null;
+            int window = alarmInfo != null ? alarmInfo.windowMinutes() : 20;
+            LocalTime toBed = alarmInfo != null ? alarmInfo.toBed() : null;
+            if (events == null) events = new ArrayList<>();
 
-            return new Night(date, alarmInfo.time(), alarmInfo.windowMinutes(),
-                    null, events);
+            log("Result: date=" + date + " alarm=" + alarm + " window=" + window
+                    + " toBed=" + toBed + " events=" + events.size());
+            return new Night(date, alarm, window, toBed, events);
         } finally {
             port.closePort();
         }
@@ -146,7 +210,6 @@ public class Device {
 
     private Night readNightPro(SerialPort port) throws IOException {
         int baudRate = _model.getBaudRate();
-        Consumer<String> logFn = this::log;
 
         port.setBaudRate(baudRate);
         port.setNumDataBits(8);
@@ -154,47 +217,61 @@ public class Device {
         port.setParity(SerialPort.NO_PARITY);
         port.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, TIMEOUT, 0);
 
-        logFn.accept("Opening port...");
+        log("Opening port...");
         if (!port.openPort()) {
             throw new IOException("Unable to open port: " + port.getSystemPortName());
         }
-        logFn.accept("Port opened. CTS=" + port.getCTS() + " DSR=" + port.getDSR());
+        log("Port opened. CTS=" + port.getCTS() + " DSR=" + port.getDSR());
 
         try {
             port.clearRTS();
             port.setDTR();
-            logFn.accept("DTR=on, RTS=off.");
+            log("DTR=on, RTS=off.");
 
-            logFn.accept("Sending handshake (0x56)...");
+            log("Sending handshake (0x56)...");
             byte[] hs = {(byte) HANDSHAKE};
             port.writeBytes(hs, 1);
             sleep(DELAY);
 
-            java.util.List<byte[]> packets = new java.util.ArrayList<>();
+            // Читаем все пакеты в цикле
+            List<byte[]> packets = new ArrayList<>();
             int packetNum = 0;
+            int emptyReads = 0;
 
-            while (true) {
+            while (emptyReads < 3) {
                 byte[] rawBuf = new byte[256];
-                int total = port.readBytes(rawBuf, rawBuf.length);
+                int n = port.readBytes(rawBuf, rawBuf.length);
 
-                if (total <= 0) {
-                    if (packetNum == 0) {
+                if (n <= 0) {
+                    emptyReads++;
+                    if (packetNum == 0 && emptyReads >= 3) {
                         throw new IOException("No response from device");
                     }
-                    logFn.accept("No more data. Total packets: " + packetNum);
-                    break;
+                    log("Empty read #" + emptyReads + ", waiting...");
+                    sleep(200);
+                    continue;
                 }
 
+                emptyReads = 0;
                 packetNum++;
-                byte[] packet = java.util.Arrays.copyOf(rawBuf, total);
+                byte[] packet = Arrays.copyOf(rawBuf, n);
                 packets.add(packet);
-                logFn.accept("Packet " + packetNum + " (" + total + " bytes)");
 
-                if (total < 10) {
+                // Лог каждого пакета
+                StringBuilder hex = new StringBuilder();
+                for (int i = 0; i < n; i++) {
+                    hex.append(String.format("%02X ", packet[i] & 0xFF));
+                }
+                log("Packet " + packetNum + " (" + n + " bytes): " + hex.toString().trim());
+
+                if (n < 10) {
                     sleep(100);
                 }
             }
 
+            log("Read complete. Packets: " + packetNum);
+
+            // Объединяем пакеты
             int totalBytes = packets.stream().mapToInt(p -> p.length).sum();
             byte[] rawBuf = new byte[totalBytes];
             int offset = 0;
@@ -204,84 +281,127 @@ public class Device {
             }
             int total = totalBytes;
 
-            logFn.accept("Combined: " + total + " bytes");
+            log("=== RAW DATA: " + total + " bytes ===");
 
+            // Hex dump
+            StringBuilder hexAll = new StringBuilder();
+            for (int i = 0; i < total; i++) {
+                hexAll.append(String.format("%02X ", rawBuf[i] & 0xFF));
+            }
+            log("HEX: " + hexAll.toString().trim());
+
+            // Побайтовый анализ
+            log("=== BYTE-BY-BYTE ===");
+            for (int i = 0; i < total; i++) {
+                int b = rawBuf[i] & 0xFF;
+                log(String.format("[%3d] 0x%02X  dec=%3d  char=%s", i, b, b,
+                        (b >= 32 && b < 127) ? "'" + (char) b + "'" : "."));
+            }
+            log("=== END ===");
+
+            // Сохраняем сырые данные в файл
+            saveRawData(rawBuf, total);
+
+            // Проверка на все нули
             boolean allZeros = true;
             for (int i = 0; i < total; i++) {
                 if ((rawBuf[i] & 0xFF) != 0) { allZeros = false; break; }
             }
-
             if (allZeros) {
                 throw new IOException("No recorded sleep data on the watch.");
             }
 
+            // Ищем handshake
             int hsIdx = -1;
             for (int i = 0; i < total; i++) {
                 if ((rawBuf[i] & 0xFF) == HANDSHAKE) {
                     hsIdx = i;
+                    log("Handshake 0x56 found at offset " + i);
                     break;
                 }
             }
 
+            // Парсинг
             InputStream in;
             DeviceReader reader;
 
             if (hsIdx >= 0) {
+                log("Parsing from offset " + (hsIdx + 1) + "...");
                 byte[] remaining = new byte[total - hsIdx - 1];
                 System.arraycopy(rawBuf, hsIdx + 1, remaining, 0, remaining.length);
-                in = new java.io.SequenceInputStream(
-                        new java.io.ByteArrayInputStream(remaining),
-                        port.getInputStream());
+                in = new ByteArrayInputStream(remaining);
                 reader = new DeviceReader(new BufferedInputStream(in), _year);
                 reader._sum = 0;
             } else {
-                logFn.accept("WARNING: No handshake (0x56) found");
-                byte[] data = new byte[total];
-                System.arraycopy(rawBuf, 0, data, 0, total);
-                in = new java.io.SequenceInputStream(
-                        new java.io.ByteArrayInputStream(data),
-                        port.getInputStream());
+                log("WARNING: No handshake found, parsing from offset 0");
+                in = new ByteArrayInputStream(Arrays.copyOf(rawBuf, total));
                 reader = new DeviceReader(new BufferedInputStream(in), _year);
             }
 
             try {
                 var date = reader.readDate();
-                logFn.accept("Date: " + date);
+                log("Date: " + date);
 
                 reader.skip();
                 int window = reader.readByte();
+                log("Window: " + window + " min");
+
                 var toBed = reader.readTime();
+                log("ToBed: " + toBed);
+
                 var alarm = reader.readTime();
+                log("Alarm: " + alarm);
 
                 int count = reader.readByte();
-                logFn.accept("Moments: " + count);
+                log("Moments count: " + count);
 
                 List<LocalTime> moments = new ArrayList<>();
                 for (int i = 0; i < count; i++) {
-                    moments.add(reader.readTime());
+                    LocalTime m = reader.readTime();
                     reader.skip();
+                    moments.add(m);
+                    log("  Moment " + (i + 1) + ": " + m);
                 }
 
                 int minutesLow = reader.readByte();
                 int minutesHigh = reader.readByte();
+                int totalMinutes = minutesLow + (minutesHigh << 8);
+                log("Total minutes: " + totalMinutes + " (low=" + minutesLow + " high=" + minutesHigh + ")");
 
                 int dataChecksum = reader.getChecksum();
                 int checksum = reader.readByte();
+                log("Checksum: calculated=" + dataChecksum + " received=" + checksum);
+
                 if (dataChecksum != checksum) {
                     throw new ProtocolException(String.format(
                             "Incorrect checksum: %d, expected: %d", dataChecksum, checksum));
                 }
 
                 reader.readEnding();
-                logFn.accept("Data read successfully!");
+                log("=== PARSE OK ===");
+                log("Date=" + date + " ToBed=" + toBed + " Alarm=" + alarm
+                        + " Window=" + window + " Moments=" + count);
 
                 return new Night(date, alarm, window, toBed, moments);
             } catch (ProtocolException e) {
-                logFn.accept("Parse error: " + e.getMessage());
+                log("Parse error: " + e.getMessage());
                 throw new IOException("Failed to parse watch data: " + e.getMessage(), e);
             }
         } finally {
             port.closePort();
+        }
+    }
+
+    private void saveRawData(byte[] data, int length) {
+        try {
+            Path logsDir = Paths.get("logs");
+            Files.createDirectories(logsDir);
+            String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+            Path rawFile = logsDir.resolve("raw_" + ts + ".dat");
+            Files.write(rawFile, Arrays.copyOf(data, length));
+            log("Raw data saved: " + rawFile.toAbsolutePath());
+        } catch (IOException e) {
+            log("Failed to save raw data: " + e.getMessage());
         }
     }
 

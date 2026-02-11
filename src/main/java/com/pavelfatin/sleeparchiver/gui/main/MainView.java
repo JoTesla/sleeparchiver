@@ -22,7 +22,8 @@ import com.pavelfatin.sleeparchiver.gui.conditions.ConditionsDialog;
 import com.pavelfatin.sleeparchiver.gui.download.DownloadDialog;
 import com.pavelfatin.sleeparchiver.gui.info.InfoDialog;
 import com.pavelfatin.sleeparchiver.gui.main.commands.*;
-import com.pavelfatin.sleeparchiver.gui.main.render.*;
+import com.pavelfatin.sleeparchiver.gui.main.render.GridTransform;
+import com.pavelfatin.sleeparchiver.gui.main.render.NightRenderer;
 import com.pavelfatin.sleeparchiver.gui.night.NightDialog;
 import com.pavelfatin.sleeparchiver.gui.preferences.PreferencesDialog;
 import com.pavelfatin.sleeparchiver.model.*;
@@ -31,15 +32,13 @@ import javafx.beans.property.SimpleBooleanProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
+import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyCombination;
 import javafx.scene.input.MouseButton;
-import javafx.scene.input.ScrollEvent;
-import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
-import javafx.scene.layout.Region;
+import javafx.scene.canvas.Canvas;
+import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.stage.WindowEvent;
@@ -51,7 +50,10 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.YearMonth;
+import java.time.format.TextStyle;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static com.pavelfatin.sleeparchiver.lang.I18n.t;
 
@@ -63,6 +65,7 @@ public class MainView extends BorderPane {
     private Preferences _preferences;
 
     private final ObservableList<Night> _nights = FXCollections.observableArrayList();
+    private List<Night> _allNights = new ArrayList<>();
     private ListView<Night> _listView;
     private final NightRenderer _renderer = new NightRenderer();
 
@@ -75,11 +78,9 @@ public class MainView extends BorderPane {
     private Document _document;
     private StatusBar _statusBar;
 
-    private final List<Transform> _transforms;
-    private final List<Zoom> _zooms;
-    private Transform _currentTransform;
-    private Zoom _currentZoom;
-    private int _zoomIndex;
+    private GridTransform _gridTransform;
+    private Canvas _topAxisCanvas;
+    private Canvas _bottomAxisCanvas;
 
     private MenuItem _undoMenuItem;
     private MenuItem _redoMenuItem;
@@ -87,24 +88,42 @@ public class MainView extends BorderPane {
     private ComboBox<String> _portCombo;
     private ComboBox<WatchModel> _modelCombo;
 
+    // Navigation controls
+    private YearMonth _currentMonth;
+    private Button _prevBtn;
+    private Label _monthLabel;
+    private Button _nextBtn;
+    private ComboBox<String> _daysCombo;
+    private HBox _monthNav;
+    private HBox _daysNav;
+
     public MainView(Stage stage, Document document, Preferences preferences) {
         _stage = stage;
         _preferences = preferences;
 
-        _transforms = createTransforms();
-        _zooms = createZooms();
-        _currentTransform = _transforms.getFirst();
-        _zoomIndex = 2; // 100%
-        _currentZoom = _zooms.get(_zoomIndex);
+        _gridTransform = createGridTransform();
+        _renderer.setTransform(_gridTransform);
 
-        _renderer.setTransform(_currentTransform);
-        _renderer.setResolution(_currentZoom.resolution());
+        _currentMonth = loadCurrentMonth();
 
         setTop(createMenuAndToolBar());
         _listView = createListView();
-        setCenter(_listView);
+
+        _topAxisCanvas = new Canvas(100, 14);
+        _bottomAxisCanvas = new Canvas(100, 14);
+
+        VBox centerBox = new VBox(_topAxisCanvas, _listView, _bottomAxisCanvas);
+        VBox.setVgrow(_listView, Priority.ALWAYS);
+        setCenter(centerBox);
+
         _statusBar = new StatusBar();
         setBottom(_statusBar);
+
+        _listView.widthProperty().addListener((obs, oldVal, newVal) -> {
+            recalcResolution();
+            redrawAxes();
+            _listView.refresh();
+        });
 
         _nights.addListener((ListChangeListener<Night>) c -> {
             updateRenderer();
@@ -115,6 +134,23 @@ public class MainView extends BorderPane {
         _stage.setOnCloseRequest(this::onCloseRequest);
 
         setDocument(document);
+    }
+
+    private GridTransform createGridTransform() {
+        boolean manual = _preferences.isManualGrid();
+        int start = _preferences.getGridStartHour();
+        int end = _preferences.getGridEndHour();
+        return new GridTransform("Grid", start, end, manual);
+    }
+
+    private YearMonth loadCurrentMonth() {
+        String saved = _preferences.getDisplayMonth();
+        if (saved != null && !saved.isEmpty()) {
+            try {
+                return YearMonth.parse(saved);
+            } catch (Exception ignored) {}
+        }
+        return YearMonth.now();
     }
 
     private javafx.scene.layout.VBox createMenuAndToolBar() {
@@ -220,22 +256,6 @@ public class MainView extends BorderPane {
     // ---- ToolBar ----
 
     private ToolBar createToolBar() {
-        ComboBox<Zoom> zoomCombo = new ComboBox<>(FXCollections.observableArrayList(_zooms));
-        zoomCombo.setValue(_currentZoom);
-        zoomCombo.setOnAction(e -> {
-            _currentZoom = zoomCombo.getValue();
-            _zoomIndex = _zooms.indexOf(_currentZoom);
-            updateRenderer();
-        });
-
-        ComboBox<Transform> transformCombo = new ComboBox<>(FXCollections.observableArrayList(_transforms));
-        transformCombo.setValue(_currentTransform);
-        transformCombo.setOnAction(e -> {
-            _currentTransform = transformCombo.getValue();
-            _renderer.setTransform(_currentTransform);
-            updateRenderer();
-        });
-
         Button addBtn = new Button(t("toolbar.add"));
         addBtn.setOnAction(e -> add());
         Button editBtn = new Button(t("toolbar.edit"));
@@ -254,19 +274,119 @@ public class MainView extends BorderPane {
         _modelCombo.setValue(WatchModel.PRO);
         _modelCombo.setPrefWidth(180);
 
+        // Restore last port/model
+        restorePortAndModel();
+
         Button refreshBtn = new Button(t("toolbar.refresh"));
         refreshBtn.setOnAction(e -> refreshPorts());
 
         Button acquireBtn = new Button(t("toolbar.acquire"));
         acquireBtn.setOnAction(e -> download());
 
+        // Navigation controls
+        _prevBtn = new Button("<");
+        _prevBtn.setOnAction(e -> navigateMonth(-1));
+        _monthLabel = new Label();
+        _monthLabel.setMinWidth(120);
+        _monthLabel.setAlignment(Pos.CENTER);
+        _nextBtn = new Button(">");
+        _nextBtn.setOnAction(e -> navigateMonth(1));
+        _monthNav = new HBox(5, _prevBtn, _monthLabel, _nextBtn);
+        _monthNav.setAlignment(Pos.CENTER);
+
+        _daysCombo = new ComboBox<>(FXCollections.observableArrayList("10", "20", "30", t("toolbar.allRecords")));
+        _daysCombo.setPrefWidth(80);
+        restoreDaysCombo();
+        _daysCombo.setOnAction(e -> {
+            saveDaysSelection();
+            applyFilter();
+        });
+        _daysNav = new HBox(5, _daysCombo);
+        _daysNav.setAlignment(Pos.CENTER);
+
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
+        HBox rightNav = new HBox(5, spacer);
+        HBox.setHgrow(rightNav, Priority.ALWAYS);
+        rightNav.setAlignment(Pos.CENTER_RIGHT);
+
+        updateNavigationVisibility(rightNav);
+
         ToolBar toolBar = new ToolBar(addBtn, editBtn, removeBtn, new Separator(),
-                _portCombo, _modelCombo, refreshBtn, acquireBtn, new Separator(),
-                spacer, transformCombo, zoomCombo);
+                _portCombo, _modelCombo, refreshBtn, acquireBtn, new Separator(), rightNav);
         return toolBar;
+    }
+
+    private void updateNavigationVisibility(HBox rightNav) {
+        rightNav.getChildren().clear();
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        rightNav.getChildren().add(spacer);
+
+        if ("days".equals(_preferences.getDisplayMode())) {
+            rightNav.getChildren().add(_daysNav);
+        } else {
+            updateMonthLabel();
+            rightNav.getChildren().add(_monthNav);
+        }
+    }
+
+    private void restorePortAndModel() {
+        String lastPort = _preferences.getLastPort();
+        if (lastPort != null && !lastPort.isEmpty()) {
+            for (String port : _portCombo.getItems()) {
+                if (port.startsWith(lastPort)) {
+                    _portCombo.setValue(port);
+                    break;
+                }
+            }
+        }
+        String lastModel = _preferences.getLastModel();
+        if (lastModel != null && !lastModel.isEmpty()) {
+            try {
+                _modelCombo.setValue(WatchModel.valueOf(lastModel));
+            } catch (IllegalArgumentException ignored) {}
+        }
+    }
+
+    private void savePortAndModel() {
+        String selected = _portCombo.getValue();
+        if (selected != null && !selected.isEmpty()) {
+            String portName = selected.contains(" ") ? selected.substring(0, selected.indexOf(' ')) : selected;
+            _preferences.setLastPort(portName);
+        }
+        WatchModel model = _modelCombo.getValue();
+        if (model != null) {
+            _preferences.setLastModel(model.name());
+        }
+        try {
+            _preferences.save();
+        } catch (IOException ignored) {}
+    }
+
+    private void restoreDaysCombo() {
+        int days = _preferences.getDisplayDays();
+        if (days == 0) {
+            _daysCombo.setValue(t("toolbar.allRecords"));
+        } else {
+            _daysCombo.setValue(String.valueOf(days));
+        }
+    }
+
+    private void saveDaysSelection() {
+        String val = _daysCombo.getValue();
+        if (val == null) return;
+        if (val.equals(t("toolbar.allRecords"))) {
+            _preferences.setDisplayDays(0);
+        } else {
+            try {
+                _preferences.setDisplayDays(Integer.parseInt(val));
+            } catch (NumberFormatException ignored) {}
+        }
+        try {
+            _preferences.save();
+        } catch (IOException ignored) {}
     }
 
     private void refreshPorts() {
@@ -275,6 +395,71 @@ public class MainView extends BorderPane {
         _portCombo.getItems().addAll(Device.listPorts());
         if (selected != null && _portCombo.getItems().contains(selected)) {
             _portCombo.setValue(selected);
+        }
+    }
+
+    // ---- Navigation ----
+
+    private void navigateMonth(int delta) {
+        _currentMonth = _currentMonth.plusMonths(delta);
+        saveCurrentMonth();
+        updateMonthLabel();
+        updateMonthButtons();
+        applyFilter();
+    }
+
+    private void updateMonthLabel() {
+        String monthName = _currentMonth.getMonth().getDisplayName(TextStyle.FULL_STANDALONE, Locale.getDefault());
+        _monthLabel.setText(capitalize(monthName) + " " + _currentMonth.getYear());
+    }
+
+    private static String capitalize(String s) {
+        if (s == null || s.isEmpty()) return s;
+        return s.substring(0, 1).toUpperCase() + s.substring(1);
+    }
+
+    private void updateMonthButtons() {
+        YearMonth prev = _currentMonth.minusMonths(1);
+        YearMonth next = _currentMonth.plusMonths(1);
+        boolean hasPrev = _allNights.stream().anyMatch(n -> YearMonth.from(n.getDate()).equals(prev));
+        boolean hasNext = _allNights.stream().anyMatch(n -> YearMonth.from(n.getDate()).equals(next));
+        _prevBtn.setDisable(!hasPrev);
+        _nextBtn.setDisable(!hasNext);
+    }
+
+    private void saveCurrentMonth() {
+        _preferences.setDisplayMonth(_currentMonth.toString());
+        try {
+            _preferences.save();
+        } catch (IOException ignored) {}
+    }
+
+    private void applyFilter() {
+        String mode = _preferences.getDisplayMode();
+        List<Night> filtered;
+
+        if ("days".equals(mode)) {
+            int days = _preferences.getDisplayDays();
+            if (days > 0 && !_allNights.isEmpty()) {
+                int fromIndex = Math.max(0, _allNights.size() - days);
+                filtered = _allNights.subList(fromIndex, _allNights.size());
+            } else {
+                filtered = _allNights;
+            }
+        } else {
+            filtered = _allNights.stream()
+                    .filter(n -> YearMonth.from(n.getDate()).equals(_currentMonth))
+                    .collect(Collectors.toList());
+        }
+
+        _nights.setAll(filtered);
+        if (!_nights.isEmpty()) {
+            _listView.getSelectionModel().selectLast();
+            _listView.scrollTo(_nights.size() - 1);
+        }
+
+        if ("month".equals(mode)) {
+            updateMonthButtons();
         }
     }
 
@@ -309,17 +494,6 @@ public class MainView extends BorderPane {
             }
         });
 
-        listView.addEventFilter(ScrollEvent.SCROLL, e -> {
-            if (e.isControlDown()) {
-                if (e.getDeltaY() > 0) {
-                    zoomIn();
-                } else if (e.getDeltaY() < 0) {
-                    zoomOut();
-                }
-                e.consume();
-            }
-        });
-
         ContextMenu contextMenu = new ContextMenu();
         MenuItem ctxEdit = new MenuItem(t("ctx.edit"));
         ctxEdit.disableProperty().bind(_editEnabled.not());
@@ -342,11 +516,8 @@ public class MainView extends BorderPane {
     void setDocument(Document document) {
         _document = document;
 
-        _nights.setAll(_document.getNights());
-        if (!_nights.isEmpty()) {
-            _listView.getSelectionModel().selectLast();
-            _listView.scrollTo(_nights.size() - 1);
-        }
+        _allNights = new ArrayList<>(_document.getNights());
+        applyFilter();
 
         _invoker.reset();
 
@@ -359,7 +530,7 @@ public class MainView extends BorderPane {
     }
 
     private boolean isModified() {
-        return !_document.getNights().equals(new ArrayList<>(_nights));
+        return !_document.getNights().equals(_allNights);
     }
 
     private void updateTitle() {
@@ -373,10 +544,16 @@ public class MainView extends BorderPane {
     private void invoke(Command command) {
         _invoker.invoke(command);
         updateCommandActions();
+        // Sync _allNights after command execution
+        syncAllNights();
         int idx = _listView.getSelectionModel().getSelectedIndex();
         if (idx >= 0) {
             _listView.scrollTo(idx);
         }
+    }
+
+    private void syncAllNights() {
+        _allNights = new ArrayList<>(_nights);
     }
 
     private void updateCommandActions() {
@@ -413,42 +590,27 @@ public class MainView extends BorderPane {
     }
 
     private void updateRenderer() {
-        _renderer.setTransform(_currentTransform);
-        _renderer.setResolution(_currentZoom.resolution());
         _renderer.setNights(new ArrayList<>(_nights));
+        recalcResolution();
+        redrawAxes();
         _listView.refresh();
     }
 
-    // ---- Zoom ----
-
-    private List<Zoom> createZooms() {
-        List<Zoom> result = new ArrayList<>();
-        for (int zoom : new int[]{50, 70, 100, 140, 200}) {
-            result.add(new Zoom(10.0 * zoom / (60.0 * 10.0), String.format("%d%%", zoom)));
-        }
-        return result;
-    }
-
-    private List<Transform> createTransforms() {
-        List<Transform> result = new ArrayList<>();
-        result.add(new RelativeTransform(t("transform.relative")));
-        result.add(new AbsoluteTransform(t("transform.absolute")));
-        return result;
-    }
-
-    private void zoomIn() {
-        if (_zoomIndex < _zooms.size() - 1) {
-            _zoomIndex++;
-            _currentZoom = _zooms.get(_zoomIndex);
-            updateRenderer();
+    private void recalcResolution() {
+        double chartWidth = _listView.getWidth() - 4 - 2 * NightRenderer.H_GAP;
+        int range = _gridTransform.getGridRangeMinutes();
+        if (chartWidth > 0 && range > 0) {
+            _renderer.setResolution(chartWidth / range);
         }
     }
 
-    private void zoomOut() {
-        if (_zoomIndex > 0) {
-            _zoomIndex--;
-            _currentZoom = _zooms.get(_zoomIndex);
-            updateRenderer();
+    private void redrawAxes() {
+        double axisWidth = _listView.getWidth() - 4;
+        if (axisWidth > 0) {
+            _topAxisCanvas.setWidth(axisWidth);
+            _bottomAxisCanvas.setWidth(axisWidth);
+            _renderer.renderTimeAxis(_topAxisCanvas, true);
+            _renderer.renderTimeAxis(_bottomAxisCanvas, false);
         }
     }
 
@@ -505,7 +667,7 @@ public class MainView extends BorderPane {
 
     private boolean doSave(File file) {
         try {
-            Document document = new Document(new ArrayList<>(_nights));
+            Document document = new Document(new ArrayList<>(_allNights));
             document.saveAs(file, _preferences.isBackupsEnabled());
             _document = document;
             updateTitle();
@@ -541,7 +703,7 @@ public class MainView extends BorderPane {
         if (file != null) {
             if (isSafeToWrite(file)) {
                 try {
-                    Document.exportData(file, new ArrayList<>(_nights));
+                    Document.exportData(file, new ArrayList<>(_allNights));
                 } catch (IOException e) {
                     showError(t("error.exportData"), t("error.exportWrite", file.getPath()));
                 }
@@ -571,16 +733,30 @@ public class MainView extends BorderPane {
     }
 
     private void remove() {
-        invoke(new Removal(t("command.removal"), _nights, _listView.getSelectionModel()));
+        int count = _listView.getSelectionModel().getSelectedIndices().size();
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
+                t("confirm.delete.message", count),
+                ButtonType.YES, ButtonType.NO);
+        confirm.setTitle(t("confirm.delete.title"));
+        confirm.setHeaderText(null);
+        confirm.initOwner(_stage);
+        Optional<ButtonType> result = confirm.showAndWait();
+        if (result.isPresent() && result.get() == ButtonType.YES) {
+            invoke(new Removal(t("command.removal"), _nights, _listView.getSelectionModel()));
+        }
     }
 
     private void download() {
         String selected = _portCombo.getValue();
         String portName = null;
         if (selected != null && !selected.isEmpty()) {
-            portName = selected.substring(0, selected.indexOf(' '));
+            portName = selected.contains(" ") ? selected.substring(0, selected.indexOf(' ')) : selected;
         }
         WatchModel model = _modelCombo.getValue() != null ? _modelCombo.getValue() : WatchModel.PRO;
+
+        // Save port/model selection
+        savePortAndModel();
+
         DownloadDialog dialog = new DownloadDialog(_stage, java.time.LocalDate.now().getYear(), portName, model);
         Optional<Night> result = dialog.showAndWait();
         result.ifPresent(this::doAddNight);
@@ -597,11 +773,13 @@ public class MainView extends BorderPane {
     private void undo() {
         _invoker.undo();
         updateCommandActions();
+        syncAllNights();
     }
 
     private void redo() {
         _invoker.redo();
         updateCommandActions();
+        syncAllNights();
     }
 
     private void selectAll() {
@@ -621,11 +799,42 @@ public class MainView extends BorderPane {
     private void preferences() {
         PreferencesDialog dialog = new PreferencesDialog(_stage, _preferences);
         dialog.showAndWait();
+
+        // Recreate GridTransform with new settings
+        _gridTransform = createGridTransform();
+        _renderer.setTransform(_gridTransform);
+
+        // Update navigation UI
+        ToolBar toolBar = (ToolBar) ((VBox) getTop()).getChildren().get(1);
+        // Find the rightNav HBox in toolbar items
+        for (var item : toolBar.getItems()) {
+            if (item instanceof HBox hBox && hBox.getChildren().stream().anyMatch(
+                    c -> c == _monthNav || c == _daysNav || (c instanceof Region))) {
+                updateNavigationVisibility(hBox);
+                break;
+            }
+        }
+
+        updateRenderer();
     }
 
     private void about() {
-        InfoDialog dialog = new InfoDialog(_stage, t("title.about"),
-                "/com/pavelfatin/sleeparchiver/resources/about.html", false);
+        Alert dialog = new Alert(Alert.AlertType.INFORMATION);
+        dialog.setTitle(t("title.about"));
+        dialog.setHeaderText(APP_NAME);
+        dialog.initOwner(_stage);
+
+        String content = String.join("\n",
+                t("about.version", APP_VERSION),
+                "",
+                t("about.description"),
+                "",
+                t("about.developer"),
+                t("about.email"),
+                "",
+                t("about.original"),
+                t("about.license"));
+        dialog.setContentText(content);
         dialog.showAndWait();
     }
 
@@ -657,8 +866,8 @@ public class MainView extends BorderPane {
         LocalTime alarm = null;
         int window = 20;
         LocalTime toBed = null;
-        if (_preferences.isPrefillEnabled() && !_nights.isEmpty()) {
-            Night last = _nights.getLast();
+        if (_preferences.isPrefillEnabled() && !_allNights.isEmpty()) {
+            Night last = _allNights.getLast();
             alarm = last.getAlarm();
             window = last.getWindow();
             toBed = last.getToBed();
@@ -668,7 +877,7 @@ public class MainView extends BorderPane {
 
     private List<String> getAllConditions() {
         Set<String> unique = new HashSet<>();
-        for (Night night : _nights) {
+        for (Night night : _allNights) {
             unique.addAll(night.getConditions());
         }
         List<String> sorted = new ArrayList<>(unique);
@@ -687,7 +896,7 @@ public class MainView extends BorderPane {
     }
 
     private boolean isUserDataSafe() {
-        if (!_nights.isEmpty() && isModified()) {
+        if (!_allNights.isEmpty() && isModified()) {
             String docName = _document.isNew() ? t("title.untitled") : _document.getName();
             Alert alert = new Alert(Alert.AlertType.CONFIRMATION,
                     t("unsaved.message", docName),
