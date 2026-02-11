@@ -25,6 +25,7 @@ import com.pavelfatin.sleeparchiver.model.Language;
 import com.pavelfatin.sleeparchiver.model.Preferences;
 import javafx.application.Application;
 import javafx.scene.Scene;
+import javafx.scene.image.Image;
 import javafx.stage.Stage;
 
 import java.io.File;
@@ -49,6 +50,11 @@ public class SleepArchiver extends Application {
         I18n.reload();
 
         MainView mainView = new MainView(stage, new Document(), preferences);
+
+        var iconUrl = getClass().getResource("/icons/icon.png");
+        if (iconUrl != null) {
+            stage.getIcons().add(new Image(iconUrl.toExternalForm()));
+        }
 
         Scene scene = new Scene(mainView, 1000, 700);
         stage.setScene(scene);

@@ -68,6 +68,7 @@ tasks.register<Exec>("jpackage") {
     dependsOn("prepareJpackageInput")
     val inputDir = layout.buildDirectory.dir("jpackage-input").get().asFile
     val outputDir = layout.buildDirectory.dir("jpackage-output").get().asFile
+    val iconsDir = file("src/main/resources/icons")
 
     val os = System.getProperty("os.name").lowercase()
     val installerType = when {
@@ -75,8 +76,13 @@ tasks.register<Exec>("jpackage") {
         os.contains("win") -> "msi"
         else -> "deb"
     }
+    val iconFile = when {
+        os.contains("mac") -> File(iconsDir, "icon.icns")
+        os.contains("win") -> File(iconsDir, "icon.ico")
+        else -> File(iconsDir, "icon.png")
+    }
 
-    commandLine(
+    val args = mutableListOf(
         "jpackage",
         "--input", inputDir.absolutePath,
         "--dest", outputDir.absolutePath,
@@ -85,6 +91,11 @@ tasks.register<Exec>("jpackage") {
         "--name", "SleepArchiver",
         "--app-version", project.version.toString(),
         "--type", installerType,
-        "--vendor", "Pavel Fatin"
+        "--vendor", "Evgen Tamarovsky"
     )
+    if (iconFile.exists()) {
+        args.addAll(listOf("--icon", iconFile.absolutePath))
+    }
+
+    commandLine(args)
 }
