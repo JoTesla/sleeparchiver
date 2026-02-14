@@ -192,8 +192,12 @@ public class NightRenderer {
         int hours = totalMinutes / 60;
         int mins = totalMinutes % 60;
         String duration = hours > 0 ? String.format("%dч %02dм", hours, mins) : String.format("%dм", mins);
-        String text = String.format("Сон: %s | %d пробужд. | ~%d мин",
-                duration, metrics.getBreaksCount(), metrics.getAverage());
+        int deepMinutes = metrics.getDeepSleepMinutes();
+        String deep = deepMinutes >= 60
+                ? String.format("%dч %02dм", deepMinutes / 60, deepMinutes % 60)
+                : String.format("%dм", deepMinutes);
+        String text = String.format("Сон: %s | %d пробужд. | ~%d мин | Глубокий: %s",
+                duration, metrics.getBreaksCount(), metrics.getAverage(), deep);
         g.fillText(text, x1 + 2, y);
     }
 

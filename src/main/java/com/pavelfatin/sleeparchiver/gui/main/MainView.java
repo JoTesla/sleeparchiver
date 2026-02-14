@@ -550,6 +550,9 @@ public class MainView extends BorderPane {
         if (idx >= 0) {
             _listView.scrollTo(idx);
         }
+        if (!_document.isNew()) {
+            save();
+        }
     }
 
     private void syncAllNights() {
@@ -897,19 +900,7 @@ public class MainView extends BorderPane {
 
     private boolean isUserDataSafe() {
         if (!_allNights.isEmpty() && isModified()) {
-            String docName = _document.isNew() ? t("title.untitled") : _document.getName();
-            Alert alert = new Alert(Alert.AlertType.CONFIRMATION,
-                    t("unsaved.message", docName),
-                    ButtonType.YES, ButtonType.NO, ButtonType.CANCEL);
-            alert.setTitle(t("unsaved.title"));
-            alert.setHeaderText(null);
-            alert.initOwner(_stage);
-            Optional<ButtonType> result = alert.showAndWait();
-            if (result.isPresent()) {
-                if (result.get() == ButtonType.YES) return save();
-                if (result.get() == ButtonType.NO) return true;
-            }
-            return false;
+            return save();
         }
         return true;
     }

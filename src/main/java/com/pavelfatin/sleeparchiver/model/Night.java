@@ -185,7 +185,14 @@ public class Night {
     List<LocalTime> getCompleteMoments() {
         List<LocalTime> moments = new ArrayList<>();
         moments.add(_toBed);
-        moments.addAll(_moments);
+        for (LocalTime m : _moments) {
+            // Skip moments after alarm (both in morning range, i.e. before 16:00)
+            if (_alarm != null && _alarm.isBefore(LocalTime.of(16, 0))
+                    && m.isBefore(LocalTime.of(16, 0)) && m.isAfter(_alarm)) {
+                continue;
+            }
+            moments.add(m);
+        }
         moments.add(_alarm);
         return moments;
     }

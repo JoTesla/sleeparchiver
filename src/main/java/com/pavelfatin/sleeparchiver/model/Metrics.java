@@ -38,6 +38,13 @@ public class Metrics {
         return getDuration() / getBreaksCount();
     }
 
+    public int getDeepSleepMinutes() {
+        return _spans.stream()
+                .mapToInt(SleepSpan::toMinutes)
+                .filter(m -> m > 45)
+                .sum();
+    }
+
     public int getBreaksCount() {
         return _moments.size() - 2;
     }
