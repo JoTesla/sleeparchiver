@@ -74,6 +74,10 @@ public class Preferences {
     @XmlElement(name = "displayMonth", namespace = "")
     private String _displayMonth;
 
+    // Sort order
+    @XmlElement(name = "sortOrder", namespace = "")
+    private String _sortOrder = "desc";
+
     // Debug logging
     @XmlElement(name = "debugLogging", namespace = "")
     private boolean _debugLogging;
@@ -141,6 +145,14 @@ public class Preferences {
 
     public void setOpenRecentEnabled(boolean enabled) {
         _openRecent = enabled;
+    }
+
+    public String getSortOrder() {
+        return _sortOrder != null ? _sortOrder : "desc";
+    }
+
+    public void setSortOrder(String order) {
+        _sortOrder = order;
     }
 
     public boolean isDebugLogging() {
@@ -328,7 +340,8 @@ public class Preferences {
                 && Objects.equals(_displayMode, other._displayMode)
                 && Objects.equals(_displayMonth, other._displayMonth)
                 && Objects.equals(_lastPort, other._lastPort)
-                && Objects.equals(_lastModel, other._lastModel);
+                && Objects.equals(_lastModel, other._lastModel)
+                && Objects.equals(_sortOrder, other._sortOrder);
     }
 
     @Override
@@ -337,7 +350,7 @@ public class Preferences {
                 _history, _historyLimit, _openRecent, _files,
                 _debugLogging, _manualGrid, _gridStartHour, _gridEndHour,
                 _displayMode, _displayDays, _displayMonth,
-                _lastPort, _lastModel);
+                _lastPort, _lastModel, _sortOrder);
     }
 
     @Override

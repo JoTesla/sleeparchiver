@@ -59,7 +59,7 @@ import static com.pavelfatin.sleeparchiver.lang.I18n.t;
 
 public class MainView extends BorderPane {
     private static final String APP_NAME = "SleepArchiver";
-    private static final String APP_VERSION = "2.0.0";
+    private static final String APP_VERSION = "2.0.2";
 
     private final Stage _stage;
     private Preferences _preferences;
@@ -434,6 +434,16 @@ public class MainView extends BorderPane {
         } catch (IOException ignored) {}
     }
 
+    private List<Night> sortedNights(List<Night> list) {
+        List<Night> result = new ArrayList<>(list);
+        if ("asc".equals(_preferences.getSortOrder())) {
+            result.sort(Night.getComparator());
+        } else {
+            result.sort(Night.getComparator().reversed());
+        }
+        return result;
+    }
+
     private void applyFilter() {
         String mode = _preferences.getDisplayMode();
         List<Night> filtered;
@@ -442,15 +452,17 @@ public class MainView extends BorderPane {
             int days = _preferences.getDisplayDays();
             if (days > 0 && !_allNights.isEmpty()) {
                 int fromIndex = Math.max(0, _allNights.size() - days);
-                filtered = _allNights.subList(fromIndex, _allNights.size());
+                filtered = new ArrayList<>(_allNights.subList(fromIndex, _allNights.size()));
             } else {
-                filtered = _allNights;
+                filtered = new ArrayList<>(_allNights);
             }
         } else {
             filtered = _allNights.stream()
                     .filter(n -> YearMonth.from(n.getDate()).equals(_currentMonth))
                     .collect(Collectors.toList());
         }
+
+        filtered = sortedNights(filtered);
 
         _nights.setAll(filtered);
         if (!_nights.isEmpty()) {
@@ -517,6 +529,7 @@ public class MainView extends BorderPane {
         _document = document;
 
         _allNights = new ArrayList<>(_document.getNights());
+        Collections.sort(_allNights, Night.getComparator());
         applyFilter();
 
         _invoker.reset();
@@ -818,6 +831,7 @@ public class MainView extends BorderPane {
             }
         }
 
+        applyFilter();
         updateRenderer();
     }
 

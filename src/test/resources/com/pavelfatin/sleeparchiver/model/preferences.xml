@@ -15,5 +15,6 @@
     <gridEndHour>10</gridEndHour>
     <displayMode>month</displayMode>
     <displayDays>30</displayDays>
+    <sortOrder>desc</sortOrder>
     <debugLogging>false</debugLogging>
 </preferences>

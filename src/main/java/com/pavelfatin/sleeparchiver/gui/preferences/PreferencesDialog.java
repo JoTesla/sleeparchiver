@@ -50,6 +50,10 @@ public class PreferencesDialog extends Dialog<Void> {
     private final RadioButton _displayMonthRadio;
     private final RadioButton _displayDaysRadio;
 
+    private final ToggleGroup _sortGroup;
+    private final RadioButton _sortDescRadio;
+    private final RadioButton _sortAscRadio;
+
     public PreferencesDialog(Stage owner, Preferences preferences) {
         _preferences = preferences;
         initOwner(owner);
@@ -122,6 +126,19 @@ public class PreferencesDialog extends Dialog<Void> {
             _displayMonthRadio.setSelected(true);
         }
 
+        // Sort order section
+        _sortGroup = new ToggleGroup();
+        _sortDescRadio = new RadioButton(t("preferences.sortDesc"));
+        _sortDescRadio.setToggleGroup(_sortGroup);
+        _sortAscRadio = new RadioButton(t("preferences.sortAsc"));
+        _sortAscRadio.setToggleGroup(_sortGroup);
+
+        if ("asc".equals(preferences.getSortOrder())) {
+            _sortAscRadio.setSelected(true);
+        } else {
+            _sortDescRadio.setSelected(true);
+        }
+
         // Layout
         VBox content = new VBox(10);
         content.setPadding(new Insets(10));
@@ -173,7 +190,9 @@ public class PreferencesDialog extends Dialog<Void> {
         displayPane.setCollapsible(false);
         VBox displayBox = new VBox(5);
         displayBox.setPadding(new Insets(5));
-        displayBox.getChildren().addAll(_displayMonthRadio, _displayDaysRadio);
+        displayBox.getChildren().addAll(_displayMonthRadio, _displayDaysRadio,
+                new Separator(),
+                new Label(t("preferences.sortOrder")), _sortDescRadio, _sortAscRadio);
         displayPane.setContent(displayBox);
 
         content.getChildren().addAll(generalPane, historyPane, gridPane, displayPane);
@@ -203,6 +222,7 @@ public class PreferencesDialog extends Dialog<Void> {
         _preferences.setGridEndHour(_gridTo.getValue());
 
         _preferences.setDisplayMode(_displayDaysRadio.isSelected() ? "days" : "month");
+        _preferences.setSortOrder(_sortAscRadio.isSelected() ? "asc" : "desc");
 
         try {
             _preferences.save();
