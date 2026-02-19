@@ -434,13 +434,17 @@ public class MainView extends BorderPane {
         } catch (IOException ignored) {}
     }
 
+    private Comparator<Night> getNightComparator() {
+        if ("asc".equals(_preferences.getSortOrder())) {
+            return Night.getComparator();
+        } else {
+            return Night.getComparator().reversed();
+        }
+    }
+
     private List<Night> sortedNights(List<Night> list) {
         List<Night> result = new ArrayList<>(list);
-        if ("asc".equals(_preferences.getSortOrder())) {
-            result.sort(Night.getComparator());
-        } else {
-            result.sort(Night.getComparator().reversed());
-        }
+        result.sort(getNightComparator());
         return result;
     }
 
@@ -466,8 +470,10 @@ public class MainView extends BorderPane {
 
         _nights.setAll(filtered);
         if (!_nights.isEmpty()) {
-            _listView.getSelectionModel().selectLast();
-            _listView.scrollTo(_nights.size() - 1);
+            boolean ascending = "asc".equals(_preferences.getSortOrder());
+            int targetIndex = ascending ? _nights.size() - 1 : 0;
+            _listView.getSelectionModel().select(targetIndex);
+            _listView.scrollTo(targetIndex);
         }
 
         if ("month".equals(mode)) {
@@ -705,7 +711,7 @@ public class MainView extends BorderPane {
             try {
                 List<Night> nights = Document.importData(file);
                 invoke(new Importing(t("command.importing"), _nights,
-                        _listView.getSelectionModel(), Night.getComparator(), nights));
+                        _listView.getSelectionModel(), getNightComparator(), nights));
             } catch (IOException e) {
                 showError(t("error.importData"), t("error.importRead", file.getPath()));
             }
@@ -733,7 +739,7 @@ public class MainView extends BorderPane {
         Optional<Night> result = dialog.showAndWait();
         result.ifPresent(night ->
                 invoke(new Addition(t("command.insertion"), _nights,
-                        _listView.getSelectionModel(), Night.getComparator(), night)));
+                        _listView.getSelectionModel(), getNightComparator(), night)));
     }
 
     private void edit() {
@@ -745,7 +751,7 @@ public class MainView extends BorderPane {
         Optional<Night> result = dialog.showAndWait();
         result.ifPresent(data ->
                 invoke(new Editing(t("command.editing"), _nights,
-                        _listView.getSelectionModel(), Night.getComparator(), data)));
+                        _listView.getSelectionModel(), getNightComparator(), data)));
     }
 
     private void remove() {
@@ -783,7 +789,7 @@ public class MainView extends BorderPane {
         Optional<Night> result = dialog.showAndWait();
         result.ifPresent(night ->
                 invoke(new Addition(t("command.insertion"), _nights,
-                        _listView.getSelectionModel(), Night.getComparator(), night)));
+                        _listView.getSelectionModel(), getNightComparator(), night)));
     }
 
     private void undo() {
