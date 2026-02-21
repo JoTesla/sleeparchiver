@@ -17,3 +17,7 @@ memories/
 settings/
 logs/
 manual/
+
+# Large binary files (original SleepTracker)
+native/SleepTracker3/jre7/
+native/*.exe

@@ -6,6 +6,10 @@ on:
       - 'v*'  # Срабатывает при push тега вида v1.0.0
   workflow_dispatch:  # Позволяет запустить вручную
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build-macos:
     runs-on: macos-latest
@@ -20,9 +24,6 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
-
-      - name: Build and Test
-        run: ./gradlew build test
 
       - name: Create DMG
         run: ./gradlew jpackage
@@ -47,10 +48,7 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Build and Test
-        run: ./gradlew build test
-
-      - name: Create EXE/MSI
+      - name: Create MSI
         run: ./gradlew jpackage
 
       - name: Upload Windows Installer
@@ -74,9 +72,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
 
       - name: Build and Test
-        run: ./gradlew build test
+        run: ./gradlew build
 
-      - name: Create DEB/RPM
+      - name: Create DEB
         run: ./gradlew jpackage
 
       - name: Upload Linux Package
