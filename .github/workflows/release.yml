@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - 'v*'  # Срабатывает при push тега вида v1.0.0
-  workflow_dispatch:  # Позволяет запустить вручную
 
 concurrency:
   group: release-${{ github.ref }}
