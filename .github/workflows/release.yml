@@ -24,6 +24,8 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
+        with:
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
 
       - name: Create DMG
         run: ./gradlew jpackage
@@ -33,6 +35,7 @@ jobs:
         with:
           name: SleepArchiver-macOS
           path: build/jpackage-output/*.dmg
+          retention-days: 30
 
   build-windows:
     runs-on: windows-latest
@@ -47,6 +50,8 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
+        with:
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
 
       - name: Create MSI
         run: ./gradlew jpackage
@@ -56,6 +61,7 @@ jobs:
         with:
           name: SleepArchiver-Windows
           path: build/jpackage-output/*.msi
+          retention-days: 30
 
   build-linux:
     runs-on: ubuntu-latest
@@ -70,18 +76,18 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
+        with:
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
 
-      - name: Build and Test
-        run: ./gradlew build
-
-      - name: Create DEB
-        run: ./gradlew jpackage
+      - name: Build, Test and Create DEB
+        run: ./gradlew build jpackage
 
       - name: Upload Linux Package
         uses: actions/upload-artifact@v4
         with:
           name: SleepArchiver-Linux
           path: build/jpackage-output/*.deb
+          retention-days: 30
 
   release:
     needs: [build-macos, build-windows, build-linux]
