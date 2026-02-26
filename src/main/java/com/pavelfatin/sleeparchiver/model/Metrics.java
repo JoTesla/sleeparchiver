@@ -69,8 +69,22 @@ public class Metrics {
         return _spans.getLast();
     }
 
+    private static final int WAKE_THRESHOLD_MINUTES = 15;
+
     public int getDuration() {
-        return new SleepSpan(getFirstSpan().begin(), getLastSpan().begin()).toMinutes();
+        return new SleepSpan(getFirstSpan().begin(), findEffectiveWakeUp()).toMinutes();
+    }
+
+    // Finds the effective wake-up time: the end of the last "real" sleep span (>= threshold).
+    // If all trailing intervals are short (< threshold), it means the person was already awake,
+    // so we count sleep only up to the start of that short-interval series.
+    private SleepInstant findEffectiveWakeUp() {
+        for (int i = _spans.size() - 1; i >= 0; i--) {
+            if (_spans.get(i).toMinutes() >= WAKE_THRESHOLD_MINUTES) {
+                return _spans.get(i).end();
+            }
+        }
+        return getLastSpan().begin();
     }
 
     public SleepSpan getTotalSpan() {
