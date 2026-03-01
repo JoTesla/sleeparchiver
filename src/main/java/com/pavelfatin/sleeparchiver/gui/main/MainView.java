@@ -59,7 +59,7 @@ import static com.pavelfatin.sleeparchiver.lang.I18n.t;
 
 public class MainView extends BorderPane {
     private static final String APP_NAME = "SleepArchiver";
-    private static final String APP_VERSION = "2.0.2";
+    private static final String APP_VERSION = "2.0.5";
 
     private final Stage _stage;
     private Preferences _preferences;
@@ -536,6 +536,15 @@ public class MainView extends BorderPane {
 
         _allNights = new ArrayList<>(_document.getNights());
         Collections.sort(_allNights, Night.getComparator());
+
+        if ("month".equals(_preferences.getDisplayMode()) && !_allNights.isEmpty()) {
+            boolean hasCurrentMonth = _allNights.stream()
+                    .anyMatch(n -> YearMonth.from(n.getDate()).equals(_currentMonth));
+            if (!hasCurrentMonth) {
+                _currentMonth = YearMonth.from(_allNights.get(_allNights.size() - 1).getDate());
+            }
+        }
+
         applyFilter();
 
         _invoker.reset();
@@ -563,19 +572,29 @@ public class MainView extends BorderPane {
     private void invoke(Command command) {
         _invoker.invoke(command);
         updateCommandActions();
-        // Sync _allNights after command execution
         syncAllNights();
+        applyFilter();
         int idx = _listView.getSelectionModel().getSelectedIndex();
         if (idx >= 0) {
             _listView.scrollTo(idx);
         }
+        updateListActions();
         if (!_document.isNew()) {
             save();
         }
     }
 
     private void syncAllNights() {
-        _allNights = new ArrayList<>(_nights);
+        if ("month".equals(_preferences.getDisplayMode())) {
+            List<Night> result = _allNights.stream()
+                    .filter(n -> !YearMonth.from(n.getDate()).equals(_currentMonth))
+                    .collect(Collectors.toList());
+            result.addAll(_nights);
+            Collections.sort(result, Night.getComparator());
+            _allNights = result;
+        } else {
+            _allNights = new ArrayList<>(_nights);
+        }
     }
 
     private void updateCommandActions() {
