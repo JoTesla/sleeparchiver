@@ -85,7 +85,10 @@ public class EliteProtocol {
         log.accept("CMD: readAlarm (0x04)");
         byte[] data = sendCommand(CMD_ALARM, 20);
 
-        // Формат: window(1) 00 alarmMin(1) 00 ??(1) 00 alarmH(1) ??(1) ??(1) 00 00 00 toBedH(1) toBedM(1)
+        // Формат (по аналогии с saveAlarmData):
+        //   [0-1] window LE, [2-3] window LE (копия), [4-5] window LE (копия)
+        //   [6-8] alarmHour (3 копии), [9-11] alarmMinute (3 копии)
+        //   [12] toBedHour, [13] toBedMinute
         if (data.length < 14) {
             throw new ProtocolException("Alarm data too short: " + data.length);
         }
@@ -95,8 +98,8 @@ public class EliteProtocol {
         }
 
         int window = data[0] & 0xFF;
-        int alarmMin = data[2] & 0xFF;
         int alarmH = data[6] & 0xFF;
+        int alarmMin = data[9] & 0xFF;
         int toBedH = data[12] & 0xFF;
         int toBedM = data[13] & 0xFF;
 

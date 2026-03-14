@@ -77,7 +77,7 @@ public class Device {
     private void openFileLog() {
         if (!_debugLogging) return;
         try {
-            Path logsDir = Paths.get("logs");
+            Path logsDir = Paths.get(System.getProperty("user.home"), "Library", "Logs", "SleepArchiver");
             Files.createDirectories(logsDir);
             String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
             Path logFile = logsDir.resolve("acquire_" + ts + ".log");
@@ -404,7 +404,7 @@ public class Device {
     private void saveRawData(byte[] data, int length) {
         if (!_debugLogging) return;
         try {
-            Path logsDir = Paths.get("logs");
+            Path logsDir = Paths.get(System.getProperty("user.home"), "Library", "Logs", "SleepArchiver");
             Files.createDirectories(logsDir);
             String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
             Path rawFile = logsDir.resolve("raw_" + ts + ".dat");
